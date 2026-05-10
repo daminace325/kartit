@@ -1,0 +1,767 @@
+/**
+ * Database seed script.
+ *
+ * Idempotent: safe to run multiple times. Uses upsert on unique fields
+ * (User.email, Category.slug, Product.slug) so re-running won't create
+ * duplicates and won't wipe existing rows.
+ *
+ * Run locally:
+ *   npm run db:seed
+ *
+ * Run on Render:
+ *   The startCommand in render.yaml runs `db:migrate:deploy` on every boot.
+ *   We append `db:seed` after it so a freshly-wiped free-tier Postgres gets
+ *   re-populated automatically. Existing data is preserved on subsequent boots
+ *   thanks to the upserts.
+ *
+ * Images:
+ *   ProductImage rows are intentionally NOT created here. Add them manually
+ *   (Cloudinary publicId + url) once you've uploaded assets.
+ */
+
+import * as path from "node:path";
+import * as dotenv from "dotenv";
+
+// Load env files BEFORE importing prisma client (which reads DATABASE_URL at
+// construction time). Resolve relative to this file so the seed works no
+// matter the cwd. Order: monorepo root .env → apps/api/.env → local cwd.
+// `override: false` (the default) means earlier files win on conflicts.
+dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+dotenv.config({ path: path.resolve(__dirname, "../../../apps/api/.env") });
+dotenv.config();
+
+import argon2 from "argon2";
+import { prisma } from "./index.js";
+
+// ─── Config ────────────────────────────────────────────────────────────
+
+const CURRENCY = "USD";
+
+const USERS = [
+  {
+    email: "admin@test.com",
+    password: "admin123",
+    name: "Admin",
+    role: "ADMIN" as const,
+  },
+  {
+    email: "damin@test.com",
+    password: "damin123",
+    name: "Damin",
+    role: "CUSTOMER" as const,
+  },
+];
+
+type ImageSeed = {
+  publicId: string;
+  alt?: string;
+};
+
+type ProductSeed = {
+  slug: string;
+  name: string;
+  description: string;
+  priceMinor: bigint;
+  stock: number;
+  /**
+   * Cloudinary public IDs in display order (index 0 = primary).
+   * Leave empty to skip images for this product. The full URL is built
+   * from CLOUDINARY_CLOUD_NAME at seed time.
+   *
+   * Example:
+   *   images: [
+   *     { publicId: "ecomm/products/iphone-17-front" },
+   *     { publicId: "ecomm/products/iphone-17-back", alt: "Back view" },
+   *   ]
+   */
+  images: ImageSeed[];
+};
+
+type SubcategorySeed = {
+  slug: string;
+  name: string;
+  products: [ProductSeed, ProductSeed];
+};
+
+type CategorySeed = {
+  slug: string;
+  name: string;
+  children: [SubcategorySeed, SubcategorySeed, SubcategorySeed];
+};
+
+const p = (
+  slug: string,
+  name: string,
+  description: string,
+  priceMinor: number,
+  images: ImageSeed[] = [],
+  stock = 25,
+): ProductSeed => ({
+  slug,
+  name,
+  description,
+  priceMinor: BigInt(priceMinor),
+  stock,
+  images,
+});
+
+// ─── Cloudinary URL builder (mirrors packages/shared/src/cloudinary.ts) ──
+// Stored URL uses no transforms — the web app applies presets at render time.
+function cloudinaryUrl(publicId: string): string {
+  const cloud = process.env.CLOUDINARY_CLOUD_NAME;
+  if (!cloud) {
+    throw new Error(
+      "Seed: CLOUDINARY_CLOUD_NAME is required when products declare images.",
+    );
+  }
+  return `https://res.cloudinary.com/${cloud}/image/upload/${publicId}`;
+}
+
+const CATEGORIES: CategorySeed[] = [
+  {
+    slug: "electronics",
+    name: "Electronics",
+    children: [
+      {
+        slug: "mobiles",
+        name: "Mobiles",
+        products: [
+          p(
+            "iphone-17",
+            "iPhone 17",
+            "Apple's latest flagship smartphone with A19 chip.",
+            99900,
+            [
+                { publicId: "ecomm/products/nzhjicnvhqmprnql2ehq" },
+                { publicId: "ecomm/products/iphone_17_3" },
+                { publicId: "ecomm/products/iphone_17_4" },
+            ],
+          ),
+          p(
+            "samsung-galaxy-s25",
+            "Samsung Galaxy S25",
+            "Samsung flagship with Snapdragon 8 Gen 4.",
+            89900,
+            [
+                { publicId: "ecomm/products/s25ultra_v7iu1o" },
+                { publicId: "ecomm/products/s25ultra_wvodei" },
+            ],
+          ),
+        ],
+      },
+      {
+        slug: "laptops",
+        name: "Laptops",
+        products: [
+          p(
+            "macbook-pro-16-m5",
+            "MacBook Pro 16 M5",
+            "16-inch MacBook Pro with M5 Pro chip.",
+            249900,
+            [{ publicId: "ecomm/products/mbpro16_wafys7" }],
+          ),
+          p(
+            "dell-xps-15",
+            "Dell XPS 15",
+            "Premium 15-inch ultrabook with OLED display.",
+            189900,
+            [{ publicId: "dellxps15_dqznef" }],
+          ),
+        ],
+      },
+      {
+        slug: "headphones",
+        name: "Headphones",
+        products: [
+          p(
+            "sony-wh-1000xm6",
+            "Sony WH-1000XM6",
+            "Industry-leading noise cancelling headphones.",
+            39900,
+            [{ publicId: "sonyhp_ngqybn" }],
+          ),
+          p(
+            "bose-quietcomfort-ultra",
+            "Bose QuietComfort Ultra",
+            "Premium over-ear ANC headphones.",
+            42900,
+            [{ publicId: "bose_vzsqdi" }],
+          ),
+        ],
+      },
+    ],
+  },
+  {
+    slug: "fashion",
+    name: "Fashion",
+    children: [
+      {
+        slug: "mens-clothing",
+        name: "Men's Clothing",
+        products: [
+          p(
+            "classic-oxford-shirt",
+            "Classic Oxford Shirt",
+            "Timeless cotton oxford in white.",
+            4500,
+            [{ publicId: "shirt1_b6c9dt" }],
+          ),
+          p(
+            "slim-fit-chinos",
+            "Slim Fit Chinos",
+            "Stretch cotton chinos in khaki.",
+            5500,
+            [{ publicId: "chinos_szmyqm" }],
+          ),
+        ],
+      },
+      {
+        slug: "womens-clothing",
+        name: "Women's Clothing",
+        products: [
+          p(
+            "wrap-midi-dress",
+            "Wrap Midi Dress",
+            "Flattering wrap dress in floral print.",
+            6900,
+            [{ publicId: "women1_jjupje" }],
+          ),
+          p(
+            "high-waist-jeans",
+            "High Waist Jeans",
+            "Vintage-inspired denim with raw hem.",
+            8900,
+            [{ publicId: "womenjeans_bygouh" }],
+          ),
+        ],
+      },
+      {
+        slug: "shoes",
+        name: "Shoes",
+        products: [
+          p(
+            "air-jordan-1-retro",
+            "Air Jordan 1 Retro",
+            "Iconic high-top sneaker.",
+            17000,
+            [{ publicId: "jordan_syxbdv" }],
+          ),
+          p(
+            "adidas-ultraboost-25",
+            "Adidas Ultraboost 25",
+            "Energy-returning running shoe.",
+            19000,
+            [{ publicId: "devas_wngkyg" }],
+          ),
+        ],
+      },
+    ],
+  },
+  {
+    slug: "home-kitchen",
+    name: "Home & Kitchen",
+    children: [
+      {
+        slug: "cookware",
+        name: "Cookware",
+        products: [
+          p(
+            "cast-iron-skillet-12",
+            "Cast Iron Skillet 12\"",
+            "Pre-seasoned heavy-duty skillet.",
+            4500,
+            [{ publicId: "pubgpan_xcckff" }],
+          ),
+          p(
+            "stainless-saucepan-set",
+            "Stainless Saucepan Set",
+            "3-piece tri-ply saucepan set.",
+            12900,
+            [{ publicId: "womansetup_jcn39y" }],
+          ),
+        ],
+      },
+      {
+        slug: "small-appliances",
+        name: "Small Appliances",
+        products: [
+          p(
+            "instant-pot-pro",
+            "Instant Pot Pro",
+            "10-in-1 pressure cooker.",
+            12900,
+            [{ publicId: "iss_wjj7rf" }],
+          ),
+          p(
+            "vitamix-a3500",
+            "Vitamix A3500",
+            "Professional-grade blender.",
+            64900,
+            [{ publicId: "juicepilado_svib5s" }],
+          ),
+        ],
+      },
+      {
+        slug: "bedding",
+        name: "Bedding",
+        products: [
+          p(
+            "egyptian-cotton-sheets",
+            "Egyptian Cotton Sheets",
+            "1000 thread count, queen size.",
+            13900,
+            [{ publicId: "bedsheet_feuwxq" }],
+          ),
+          p(
+            "down-alternative-comforter",
+            "Down Alternative Comforter",
+            "All-season hypoallergenic.",
+            8900,
+            [{ publicId: "bedsheet2_sseok9" }],
+          ),
+        ],
+      },
+    ],
+  },
+  {
+    slug: "books",
+    name: "Books",
+    children: [
+      {
+        slug: "fiction",
+        name: "Fiction",
+        products: [
+          p(
+            "the-midnight-library",
+            "The Midnight Library",
+            "Novel by Matt Haig.",
+            1500,
+            [{ publicId: "book1_uwnq2t" }],
+          ),
+          p(
+            "project-hail-mary",
+            "Project Hail Mary",
+            "Sci-fi by Andy Weir.",
+            1700,
+            [{ publicId: "book2_euxmxe" }],
+          ),
+        ],
+      },
+      {
+        slug: "non-fiction",
+        name: "Non-Fiction",
+        products: [
+          p(
+            "atomic-habits",
+            "Atomic Habits",
+            "Self-help by James Clear.",
+            1800,
+            [{ publicId: "book3_bl3egg" }],
+          ),
+          p(
+            "sapiens",
+            "Sapiens",
+            "A Brief History of Humankind.",
+            2000,
+            [{ publicId: "book4_u4a4wc" }],
+          ),
+        ],
+      },
+      {
+        slug: "childrens-books",
+        name: "Children's Books",
+        products: [
+          p(
+            "where-the-wild-things-are",
+            "Where the Wild Things Are",
+            "Maurice Sendak classic.",
+            1200,
+            [{ publicId: "book5_b3ynou" }],
+          ),
+          p(
+            "the-very-hungry-caterpillar",
+            "The Very Hungry Caterpillar",
+            "Eric Carle classic.",
+            1100,
+            [{ publicId: "book5_jemwk8" }],
+          ),
+        ],
+      },
+    ],
+  },
+  {
+    slug: "sports-outdoors",
+    name: "Sports & Outdoors",
+    children: [
+      {
+        slug: "fitness",
+        name: "Fitness",
+        products: [
+          p(
+            "adjustable-dumbbells",
+            "Adjustable Dumbbells",
+            "5–52.5 lb pair.",
+            39900,
+            [{ publicId: "dumbell_x7rcfd" }],
+          ),
+          p(
+            "yoga-mat-pro",
+            "Yoga Mat Pro",
+            "6mm extra-thick non-slip mat.",
+            5900,
+            [{ publicId: "yogamat_ozpucu" }],
+          ),
+        ],
+      },
+      {
+        slug: "camping",
+        name: "Camping",
+        products: [
+          p(
+            "4-person-tent",
+            "4-Person Tent",
+            "Waterproof family tent.",
+            14900,
+            [{ publicId: "tent_trcaon" }],
+          ),
+          p(
+            "down-sleeping-bag",
+            "Down Sleeping Bag",
+            "20°F mummy bag.",
+            17900,
+            [{ publicId: "sleepingbag_vdn9ok" }],
+          ),
+        ],
+      },
+      {
+        slug: "cycling",
+        name: "Cycling",
+        products: [
+          p(
+            "road-bike-carbon",
+            "Carbon Road Bike",
+            "Entry-level carbon frame.",
+            149900,
+            [{ publicId: "bike_w4owsw" }],
+          ),
+          p(
+            "mtb-hardtail-29",
+            "Hardtail MTB 29\"",
+            "Aluminum hardtail mountain bike.",
+            89900,
+            [{ publicId: "bike2_p2ls6d" }],
+          ),
+        ],
+      },
+    ],
+  },
+  {
+    slug: "beauty",
+    name: "Beauty",
+    children: [
+      {
+        slug: "skincare",
+        name: "Skincare",
+        products: [
+          p(
+            "vitamin-c-serum",
+            "Vitamin C Serum",
+            "20% L-ascorbic acid serum.",
+            3500,
+            [{ publicId: "vcser_pyob2o" }],
+          ),
+          p(
+            "hyaluronic-acid",
+            "Hyaluronic Acid",
+            "Hydrating face serum.",
+            1900,
+            [{ publicId: "hacid_cgwfhh" }],
+          ),
+        ],
+      },
+      {
+        slug: "makeup",
+        name: "Makeup",
+        products: [
+          p(
+            "matte-liquid-lipstick",
+            "Matte Liquid Lipstick",
+            "Long-wearing matte finish.",
+            2200,
+            [{ publicId: "lipstick_vprqte" }],
+          ),
+          p(
+            "waterproof-mascara",
+            "Waterproof Mascara",
+            "Volume + length mascara.",
+            2500,
+            [{ publicId: "mascara_ol8j6g" }],
+          ),
+        ],
+      },
+      {
+        slug: "haircare",
+        name: "Haircare",
+        products: [
+          p(
+            "argan-oil-shampoo",
+            "Argan Oil Shampoo",
+            "Sulfate-free moisturizing.",
+            1800,
+            [{ publicId: "arganoil_w3uvmo" }],
+          ),
+          p(
+            "deep-conditioner",
+            "Deep Conditioner",
+            "Weekly hair mask.",
+            2400,
+            [{ publicId: "condi_bfelwk" }],
+          ),
+        ],
+      },
+    ],
+  },
+  {
+    slug: "toys-games",
+    name: "Toys & Games",
+    children: [
+      {
+        slug: "board-games",
+        name: "Board Games",
+        products: [
+          p(
+            "catan",
+            "Catan",
+            "Strategic resource trading game.",
+            4500,
+            [{ publicId: "catan_vvhevj" }],
+          ),
+          p(
+            "ticket-to-ride",
+            "Ticket to Ride",
+            "Cross-country train adventure.",
+            5500,
+            [{ publicId: "ttr_rdgici" }],
+          ),
+        ],
+      },
+      {
+        slug: "lego",
+        name: "LEGO",
+        products: [
+          p(
+            "lego-millennium-falcon",
+            "LEGO Millennium Falcon",
+            "7,541-piece UCS set.",
+            84900,
+            [{ publicId: "lego1_tnkdjg" }],
+          ),
+          p(
+            "lego-creator-house",
+            "LEGO Creator Modular House",
+            "3-in-1 build set.",
+            8900,
+            [{ publicId: "lego2_jticpi" }],
+          ),
+        ],
+      },
+      {
+        slug: "video-games",
+        name: "Video Games",
+        products: [
+          p(
+            "red-dead-redemption-II",
+            "Red Dead Redemption 2",
+            "Playstation 4.",
+            5900,
+            [{ publicId: "rdr2_uhhmfu" }],
+          ),
+          p(
+            "god-of-war-ragnarok",
+            "God of War Ragnarök",
+            "PlayStation 5.",
+            6900,
+            [{ publicId: "gowr_cssh3y" }],
+          ),
+        ],
+      },
+    ],
+  },
+  {
+    slug: "groceries",
+    name: "Groceries",
+    children: [
+      {
+        slug: "coffee-tea",
+        name: "Coffee & Tea",
+        products: [
+          p(
+            "ethiopian-single-origin",
+            "Ethiopian Single Origin",
+            "Whole bean, 12oz light roast.",
+            1800,
+            [{ publicId: "tea1_t5ucdq" }],
+          ),
+          p(
+            "matcha-ceremonial",
+            "Ceremonial Grade Matcha",
+            "30g stone-ground matcha.",
+            2900,
+            [{ publicId: "tea2_ne4ggv" }],
+          ),
+        ],
+      },
+      {
+        slug: "snacks",
+        name: "Snacks",
+        products: [
+          p(
+            "dark-chocolate-bar-85",
+            "85% Dark Chocolate Bar",
+            "Single-origin Ecuadorian.",
+            600,
+            [{ publicId: "choco_ewnrnm" }],
+          ),
+          p(
+            "mixed-nuts-roasted",
+            "Mixed Nuts (Roasted)",
+            "1lb sea-salt mix.",
+            1500,
+            [{ publicId: "oats_z5qint" }],
+          ),
+        ],
+      },
+      {
+        slug: "pantry",
+        name: "Pantry",
+        products: [
+          p(
+            "extra-virgin-olive-oil",
+            "Extra Virgin Olive Oil",
+            "First cold-pressed, 500ml.",
+            2200,
+            [{ publicId: "oil_s3f62q" }],
+          ),
+          p(
+            "aged-balsamic-vinegar",
+            "Aged Balsamic Vinegar",
+            "Modena, 250ml.",
+            2800,
+            [{ publicId: "oil2_k7exbm" }],
+          ),
+        ],
+      },
+    ],
+  }
+];
+
+// ─── Seed runner ───────────────────────────────────────────────────────
+
+async function seedUsers() {
+  for (const u of USERS) {
+    const passwordHash = await argon2.hash(u.password, { type: argon2.argon2id });
+    await prisma.user.upsert({
+      where: { email: u.email },
+      // Re-hash on every run so password changes here propagate.
+      update: { name: u.name, role: u.role, passwordHash },
+      create: {
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        passwordHash,
+      },
+    });
+    console.log(`  user: ${u.email} (${u.role})`);
+  }
+}
+
+async function seedCatalog() {
+  for (const cat of CATEGORIES) {
+    const parent = await prisma.category.upsert({
+      where: { slug: cat.slug },
+      update: { name: cat.name, parentId: null },
+      create: { slug: cat.slug, name: cat.name },
+    });
+    console.log(`  category: ${cat.name}`);
+
+    for (const sub of cat.children) {
+      const child = await prisma.category.upsert({
+        where: { slug: sub.slug },
+        update: { name: sub.name, parentId: parent.id },
+        create: { slug: sub.slug, name: sub.name, parentId: parent.id },
+      });
+      console.log(`    └─ ${sub.name}`);
+
+      for (const prod of sub.products) {
+        const product = await prisma.product.upsert({
+          where: { slug: prod.slug },
+          update: {
+            name: prod.name,
+            description: prod.description,
+            priceMinor: prod.priceMinor,
+            currency: CURRENCY,
+            stock: prod.stock,
+            isActive: true,
+            categoryId: child.id,
+          },
+          create: {
+            slug: prod.slug,
+            name: prod.name,
+            description: prod.description,
+            priceMinor: prod.priceMinor,
+            currency: CURRENCY,
+            stock: prod.stock,
+            isActive: true,
+            categoryId: child.id,
+          },
+        });
+        console.log(`        • ${prod.name}`);
+
+        // Upsert images keyed by (productId, position). Re-running the seed
+        // refreshes URLs/alts in-place; positions not present here are left
+        // alone (delete them manually if you want them gone).
+        // Empty publicId entries are skipped so you can scaffold first and
+        // fill in real Cloudinary IDs later without breaking the seed.
+        for (let i = 0; i < prod.images.length; i++) {
+          const img = prod.images[i]!;
+          if (!img.publicId.trim()) continue;
+          const url = cloudinaryUrl(img.publicId);
+          await prisma.productImage.upsert({
+            where: {
+              productId_position: { productId: product.id, position: i },
+            },
+            update: {
+              url,
+              publicId: img.publicId,
+              alt: img.alt ?? null,
+            },
+            create: {
+              productId: product.id,
+              url,
+              publicId: img.publicId,
+              alt: img.alt ?? null,
+              position: i,
+            },
+          });
+        }
+      }
+    }
+  }
+}
+
+async function main() {
+  console.log("Seeding users…");
+  await seedUsers();
+  console.log("Seeding categories & products…");
+  await seedCatalog();
+  console.log("Done.");
+}
+
+main()
+  .catch((err) => {
+    console.error("Seed failed:", err);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

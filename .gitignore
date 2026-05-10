@@ -1,0 +1,59 @@
+# Dependencies
+/node_modules
+.pnp
+.pnp.*
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+
+# Env files (root + every workspace). Examples are committed.
+.env
+.env.*
+!.env.example
+apps/*/.env
+apps/*/.env.*
+!apps/*/.env.example
+packages/*/.env
+packages/*/.env.*
+!packages/*/.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing / coverage
+coverage/
+.nyc_output/
+
+# Editor / OS
+.DS_Store
+.editorconfig
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+Thumbs.db
+
+# Misc
+*.pem
+.vercel
+.turbo
+.cache/
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+
+# Docker volumes (if mapped locally)
+docker-data/
+
+# Local-only working notes / handoff docs
+context/

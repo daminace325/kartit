@@ -1,0 +1,64 @@
+# Render Blueprint — provisions the API web service + a managed Postgres instance.
+# Apply via: Render dashboard → New → Blueprint → point at this repo.
+# Docs: https://render.com/docs/blueprint-spec
+#
+# After first deploy:
+#   1. In the `ecomm-api` service → Environment, fill every `sync: false` value
+#      (JWT_SECRET, Cloudinary creds, Stripe keys, WEB_ORIGINS).
+#   2. Add a Stripe webhook pointing at https://<service>.onrender.com/payments/webhook
+#      and copy its signing secret into STRIPE_WEBHOOK_SECRET.
+
+databases:
+  - name: ecomm-postgres
+    plan: free
+    databaseName: ecomm
+    user: ecomm
+
+services:
+  - type: web
+    name: ecomm-api
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: .
+    # Install at the repo root so npm workspaces can hoist + symlink @repo/*.
+    # `prisma generate` runs automatically via packages/db postinstall.
+    buildCommand: npm ci && npm run build:api
+    startCommand: npm run db:migrate:deploy && npm run db:seed && npm run start:api
+    healthCheckPath: /health/live
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20.19.0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ecomm-postgres
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: COOKIE_NAME
+        value: ecomm_auth
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: none
+      - key: WEB_ORIGINS
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_FOLDER
+        value: ecomm/products
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_CURRENCY
+        value: USD
