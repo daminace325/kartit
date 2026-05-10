@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { loadStripe, type Stripe } from "@stripe/stripe-js";
@@ -10,7 +11,7 @@ import {
     useElements,
     useStripe,
 } from "@stripe/react-stripe-js";
-import { formatMoney } from "@repo/shared";
+import { formatMoney, type AddressDTO } from "@repo/shared";
 import { formatApiError } from "@/lib/errors";
 
 type Row = {
@@ -30,6 +31,7 @@ interface Props {
     taxMinor: string;
     totalMinor: string;
     currency: string;
+    addresses: AddressDTO[];
     shippingNote?: string;
     taxNote?: string;
 }
@@ -65,12 +67,16 @@ export default function CheckoutClient(props: Props) {
         taxMinor,
         totalMinor,
         currency,
+        addresses,
         shippingNote,
         taxNote,
     } = props;
 
     const [creating, setCreating] = useState(false);
     const [orderError, setOrderError] = useState<string | null>(null);
+    const [selectedAddressId, setSelectedAddressId] = useState(
+        addresses[0]?.id ?? "",
+    );
     const [order, setOrder] = useState<{
         id: string;
         clientSecret: string;
@@ -82,10 +88,14 @@ export default function CheckoutClient(props: Props) {
             .map((row) => `${row.productId}:${row.quantity}`)
             .sort()
             .join("|");
-        return `ecomm:checkout:idempotency:${currency}:${totalMinor}:${cartFingerprint}`;
-    }, [currency, rows, totalMinor]);
+        return `ecomm:checkout:idempotency:${currency}:${totalMinor}:${selectedAddressId}:${cartFingerprint}`;
+    }, [currency, rows, selectedAddressId, totalMinor]);
 
     async function startPayment() {
+        if (!selectedAddressId) {
+            setOrderError("Select a shipping address before continuing.");
+            return;
+        }
         setCreating(true);
         setOrderError(null);
         const idempotencyKey = getCheckoutAttemptKey(checkoutAttemptStorageKey);
@@ -96,7 +106,7 @@ export default function CheckoutClient(props: Props) {
                     "Content-Type": "application/json",
                     "Idempotency-Key": idempotencyKey,
                 },
-                body: JSON.stringify({}),
+                body: JSON.stringify({ shippingAddressId: selectedAddressId }),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
@@ -154,6 +164,73 @@ export default function CheckoutClient(props: Props) {
                 </section>
 
                 <section>
+                    <h2 className="text-lg font-semibold text-white">Shipping address</h2>
+                    <div className="mt-4 rounded-md border border-slate-700 bg-slate-800 p-5">
+                        {addresses.length === 0 ? (
+                            <div>
+                                <p className="text-sm text-slate-300">
+                                    Add a delivery address before starting payment.
+                                </p>
+                                <Link
+                                    href="/profile/addresses"
+                                    className="mt-4 inline-flex items-center rounded-md bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
+                                >
+                                    Add address
+                                </Link>
+                            </div>
+                        ) : (
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                {addresses.map((addr) => {
+                                    const selected = addr.id === selectedAddressId;
+                                    return (
+                                        <label
+                                            key={addr.id}
+                                            className={`block cursor-pointer rounded-md border p-4 text-sm transition ${
+                                                selected
+                                                    ? "border-sky-400 bg-sky-500/10"
+                                                    : "border-slate-700 bg-slate-900 hover:border-slate-500"
+                                            }`}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="shippingAddressId"
+                                                value={addr.id}
+                                                checked={selected}
+                                                onChange={() => {
+                                                    setSelectedAddressId(addr.id);
+                                                    setOrderError(null);
+                                                }}
+                                                className="sr-only"
+                                            />
+                                            <span className="block font-medium text-white">
+                                                {addr.name}
+                                            </span>
+                                            <span className="mt-1 block text-slate-400">
+                                                {addr.phone}
+                                            </span>
+                                            <span className="mt-3 block text-slate-300">
+                                                {addr.line1}
+                                                {addr.line2 ? `, ${addr.line2}` : ""}
+                                            </span>
+                                            <span className="block text-slate-400">
+                                                {addr.city}
+                                                {addr.state ? `, ${addr.state}` : ""}{" "}
+                                                {addr.postalCode}
+                                            </span>
+                                            {addr.country && (
+                                                <span className="block text-slate-400">
+                                                    {addr.country}
+                                                </span>
+                                            )}
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </section>
+
+                <section>
                     <h2 className="text-lg font-semibold text-white">Payment</h2>
                     <div className="mt-4 rounded-md border border-slate-700 bg-slate-800 p-5">
                         {!order ? (
@@ -170,7 +247,7 @@ export default function CheckoutClient(props: Props) {
                                 <button
                                     type="button"
                                     onClick={startPayment}
-                                    disabled={creating}
+                                    disabled={creating || !selectedAddressId}
                                     className="mt-4 inline-flex items-center justify-center gap-2 rounded-md bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-400 disabled:opacity-60"
                                 >
                                     {creating ? (

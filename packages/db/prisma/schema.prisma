@@ -54,6 +54,8 @@ model Address {
   id         String  @id @default(cuid())
   userId     String
   user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  phone      String
   line1      String
   line2      String?
   city       String
@@ -157,6 +159,14 @@ model Order {
   taxMinor      BigInt      @default(0)
   totalMinor    BigInt
   currency      String      @db.Char(3)
+  shippingName       String
+  shippingPhone      String
+  shippingLine1      String
+  shippingLine2      String?
+  shippingCity       String
+  shippingState      String?
+  shippingPostalCode String
+  shippingCountry    String
 
   items    OrderItem[]
   payments Payment[]

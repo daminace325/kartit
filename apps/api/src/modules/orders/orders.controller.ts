@@ -1,6 +1,7 @@
 import { RequestHandler } from "express";
 import {
     UserRole,
+    type OrderCreateInput,
     type OrderListQuery,
     type OrderStatusUpdateInput,
 } from "@repo/shared";
@@ -16,7 +17,8 @@ function userOrThrow(req: Parameters<RequestHandler>[0]) {
 export const createOrder: RequestHandler = async (req, res, next) => {
     try {
         const user = userOrThrow(req);
-        const result = await ordersService.create(user.id);
+        const input = req.body as OrderCreateInput;
+        const result = await ordersService.create(user.id, input);
         res.status(201).json(result);
     } catch (err) {
         next(err);

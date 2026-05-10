@@ -119,6 +119,8 @@ export const authService = {
         const row = await prisma.address.create({
             data: {
                 userId,
+                name: input.name,
+                phone: input.phone,
                 line1: input.line1,
                 line2: input.line2 ?? null,
                 city: input.city,
@@ -145,6 +147,8 @@ export const authService = {
         const row = await prisma.address.update({
             where: { id: addressId },
             data: {
+                name: input.name,
+                phone: input.phone,
                 line1: input.line1,
                 line2: input.line2 ?? null,
                 city: input.city,
@@ -170,6 +174,8 @@ export const authService = {
 
 const toAddressDTO = (a: {
     id: string;
+    name: string;
+    phone: string;
     line1: string;
     line2: string | null;
     city: string;
@@ -180,6 +186,8 @@ const toAddressDTO = (a: {
     updatedAt: Date;
 }): AddressDTO => ({
     id: a.id,
+    name: a.name,
+    phone: a.phone,
     line1: a.line1,
     line2: a.line2,
     city: a.city,

@@ -5,6 +5,7 @@ import {
     OrderStatus,
     PaymentStatus,
     type OrderDTO,
+    type OrderCreateInput,
     type OrderItemDTO,
     type OrderListQuery,
     type OrderListResponse,
@@ -87,6 +88,14 @@ function toOrderDTO(order: OrderWithItems): OrderDTO {
         taxMinor: order.taxMinor.toString(),
         totalMinor: order.totalMinor.toString(),
         currency: order.currency,
+        shippingName: order.shippingName,
+        shippingPhone: order.shippingPhone,
+        shippingLine1: order.shippingLine1,
+        shippingLine2: order.shippingLine2,
+        shippingCity: order.shippingCity,
+        shippingState: order.shippingState,
+        shippingPostalCode: order.shippingPostalCode,
+        shippingCountry: order.shippingCountry,
         items: order.items.map(toItemDTO),
         paidAt: order.paidAt ? order.paidAt.toISOString() : null,
         createdAt: order.createdAt.toISOString(),
@@ -95,7 +104,17 @@ function toOrderDTO(order: OrderWithItems): OrderDTO {
 }
 
 export const ordersService = {
-    async create(userId: string): Promise<CreateOrderResponse> {
+    async create(
+        userId: string,
+        input: OrderCreateInput,
+    ): Promise<CreateOrderResponse> {
+        const shippingAddress = await prisma.address.findUnique({
+            where: { id: input.shippingAddressId },
+        });
+        if (!shippingAddress || shippingAddress.userId !== userId) {
+            throw AppError.notFound("ADDRESS_NOT_FOUND", "Shipping address not found");
+        }
+
         const cart = await prisma.cart.findUnique({
             where: { userId },
             include: {
@@ -193,6 +212,14 @@ export const ordersService = {
                         taxMinor: pricing.tax,
                         totalMinor: pricing.total,
                         currency: pricing.currency,
+                        shippingName: shippingAddress.name,
+                        shippingPhone: shippingAddress.phone,
+                        shippingLine1: shippingAddress.line1,
+                        shippingLine2: shippingAddress.line2,
+                        shippingCity: shippingAddress.city,
+                        shippingState: shippingAddress.state,
+                        shippingPostalCode: shippingAddress.postalCode,
+                        shippingCountry: shippingAddress.country ?? "",
                         items: {
                             create: itemsSnapshot.map((it) => ({
                                 productId: it.productId,

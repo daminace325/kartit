@@ -112,6 +112,8 @@ export default function AddressesManager({
                             className="rounded-md border border-slate-700 bg-slate-800 p-4"
                         >
                             <div className="text-sm text-slate-200">
+                                <p className="font-medium text-white">{addr.name}</p>
+                                <p className="text-slate-400">{addr.phone}</p>
                                 <p>{addr.line1}</p>
                                 {addr.line2 && <p>{addr.line2}</p>}
                                 <p>
@@ -157,6 +159,8 @@ function AddressForm({
     onSubmit: (a: AddressInput) => Promise<string | null>;
     onCancel: () => void;
 }) {
+    const [name, setName] = useState(initial?.name ?? "");
+    const [phone, setPhone] = useState(initial?.phone ?? "");
     const [line1, setLine1] = useState(initial?.line1 ?? "");
     const [line2, setLine2] = useState(initial?.line2 ?? "");
     const [city, setCity] = useState(initial?.city ?? "");
@@ -171,6 +175,8 @@ function AddressForm({
         setLoading(true);
         setError(null);
         const payload: AddressInput = {
+            name: name.trim(),
+            phone: phone.trim(),
             line1: line1.trim(),
             line2: line2.trim() ? line2.trim() : null,
             city: city.trim(),
@@ -205,6 +211,10 @@ function AddressForm({
                 </div>
             )}
 
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Recipient name" required value={name} onChange={setName} />
+                <Field label="Phone" required value={phone} onChange={setPhone} />
+            </div>
             <Field label="Address line 1" required value={line1} onChange={setLine1} />
             <Field label="Address line 2" value={line2 ?? ""} onChange={setLine2} />
 

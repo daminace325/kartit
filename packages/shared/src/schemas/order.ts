@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { OrderStatus } from "../enums";
 
-// Phase 1: order is created from the current cart, no body needed.
-// Kept as an empty object for future fields (couponCode, addressId, etc.)
-export const orderCreateSchema = z.looseObject({});
+export const orderCreateSchema = z.object({
+    shippingAddressId: z.string().min(1),
+});
 export type OrderCreateInput = z.infer<typeof orderCreateSchema>;
 
 export const orderListQuerySchema = z.object({
@@ -52,6 +52,14 @@ export type OrderDTO = {
     taxMinor: string;
     totalMinor: string;
     currency: string;
+    shippingName: string;
+    shippingPhone: string;
+    shippingLine1: string;
+    shippingLine2: string | null;
+    shippingCity: string;
+    shippingState: string | null;
+    shippingPostalCode: string;
+    shippingCountry: string;
     items: OrderItemDTO[];
     paidAt: string | null;
     createdAt: string;

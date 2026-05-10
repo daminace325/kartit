@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { api, ApiClientError } from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
-import type { CartDTO, CartSummaryDTO } from "@repo/shared";
+import type { AddressDTO, CartDTO, CartSummaryDTO } from "@repo/shared";
 import CheckoutClient from "@/components/CheckoutClient";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +18,9 @@ export default async function CheckoutPage() {
     // Verify the cart still has items, then fetch live pricing.
     const { cart } = await api.get<{ cart: CartDTO }>("/cart");
     if (cart.items.length === 0) redirect("/cart");
+    const { addresses } = await api.get<{ addresses: AddressDTO[] }>(
+        "/auth/me/addresses",
+    );
 
     let summary: CartSummaryDTO;
     try {
@@ -88,6 +91,7 @@ export default async function CheckoutPage() {
                 taxMinor={summary.taxMinor}
                 totalMinor={summary.totalMinor}
                 currency={summary.currency}
+                addresses={addresses}
                 shippingNote={summary.shippingNote}
                 taxNote={summary.taxNote}
             />

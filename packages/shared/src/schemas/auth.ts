@@ -25,6 +25,8 @@ export const updateProfileSchema = z.object({
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
 export const addressInputSchema = z.object({
+    name: z.string().min(1).max(80),
+    phone: z.string().min(7).max(30),
     line1: z.string().min(1).max(120),
     line2: z.string().max(120).optional().nullable(),
     city: z.string().min(1).max(80),
@@ -36,6 +38,8 @@ export type AddressInput = z.infer<typeof addressInputSchema>;
 
 export type AddressDTO = {
     id: string;
+    name: string;
+    phone: string;
     line1: string;
     line2: string | null;
     city: string;

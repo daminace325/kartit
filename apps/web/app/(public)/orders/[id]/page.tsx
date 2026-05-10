@@ -182,6 +182,24 @@ export default async function OrderDetailPage({
                 </section>
 
                 <aside>
+                    <div className="mb-6 rounded-md border border-slate-700 bg-slate-800 p-6">
+                        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+                            Shipping address
+                        </h2>
+                        <div className="mt-4 text-sm text-slate-300">
+                            <p className="font-medium text-white">{order.shippingName}</p>
+                            <p className="text-slate-400">{order.shippingPhone}</p>
+                            <p className="mt-3">{order.shippingLine1}</p>
+                            {order.shippingLine2 && <p>{order.shippingLine2}</p>}
+                            <p>
+                                {order.shippingCity}
+                                {order.shippingState ? `, ${order.shippingState}` : ""}{" "}
+                                {order.shippingPostalCode}
+                            </p>
+                            <p>{order.shippingCountry}</p>
+                        </div>
+                    </div>
+
                     <div className="rounded-md border border-slate-700 bg-slate-800 p-6">
                         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
                             Summary
