@@ -230,3 +230,16 @@ model IdempotencyKey {
   @@unique([userId, key])
   @@index([expiresAt])
 }
+
+model WebhookEvent {
+  id          String    @id @default(cuid())
+  provider    String
+  eventId     String    @unique
+  type        String
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  payload     Json
+
+  @@index([provider])
+  @@index([processedAt])
+}
