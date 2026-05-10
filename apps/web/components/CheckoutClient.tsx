@@ -117,7 +117,6 @@ export default function CheckoutClient(props: Props) {
                 setOrderError("Payment provider did not return a client secret.");
                 return;
             }
-            window.sessionStorage.removeItem(checkoutAttemptStorageKey);
             setOrder({ id: data.order.id, clientSecret: data.clientSecret });
         } catch {
             setOrderError("Network error. Please try again.");
