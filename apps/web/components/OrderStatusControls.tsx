@@ -8,10 +8,11 @@ import { formatApiError } from "@/lib/errors";
 import { ORDER_STATUS_LABELS } from "@/lib/order_status";
 
 // Mirrors the server-side ALLOWED_TRANSITIONS in orders.service.
+// REFUND is handled via POST /orders/:id/refund (calls Stripe), not status patch.
 const NEXT_STEPS: Record<OrderStatus, OrderStatus[]> = {
     PENDING: ["PAID", "CANCELLED", "FAILED"],
-    PAID: ["PROCESSING", "CANCELLED", "REFUNDED"],
-    PROCESSING: ["SHIPPED", "CANCELLED", "REFUNDED"],
+    PAID: ["PROCESSING", "REFUNDED"],
+    PROCESSING: ["SHIPPED", "REFUNDED"],
     SHIPPED: ["DELIVERED", "REFUNDED"],
     DELIVERED: ["REFUNDED"],
     CANCELLED: [],
@@ -46,14 +47,27 @@ export default function OrderStatusControls({ orderId, currentStatus }: Props) {
         setUpdating(status);
         setError(null);
         try {
-            const res = await fetch(`/api/orders/${orderId}/status`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ status }),
+            // REFUND goes through a different endpoint that calls Stripe
+            const isRefund = status === "REFUNDED";
+            const url = isRefund
+                ? `/api/orders/${orderId}/refund`
+                : `/api/orders/${orderId}/status`;
+            const method = isRefund ? "POST" : "PATCH";
+            const body = isRefund
+                ? undefined
+                : JSON.stringify({ status });
+
+            const res = await fetch(url, {
+                method,
+                headers: body ? { "Content-Type": "application/json" } : undefined,
+                body,
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
-                setError(formatApiError(data?.error, "Failed to update status"));
+                const msg = isRefund
+                    ? "Failed to initiate refund"
+                    : "Failed to update status";
+                setError(formatApiError(data?.error, msg));
                 setUpdating(null);
                 return;
             }
@@ -94,6 +108,8 @@ export default function OrderStatusControls({ orderId, currentStatus }: Props) {
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                         Updating...
                                     </>
+                                ) : status === "REFUNDED" ? (
+                                    "Initiate Refund"
                                 ) : (
                                     `Mark as ${ORDER_STATUS_LABELS[status]}`
                                 )}
