@@ -102,6 +102,20 @@ export const stripeWebhook: RequestHandler = async (req, res, next) => {
                 }
                 break;
             }
+            case "charge.refunded": {
+                const charge = event.data.object as Stripe.Charge;
+                // charge.payment_intent is the PaymentIntent ID
+                const paymentIntentId = charge.payment_intent as string;
+                const order = await ordersService.markRefundedByPaymentIntent(
+                    paymentIntentId,
+                );
+                if (!order) {
+                    console.warn(
+                        `[stripe] charge.refunded for unknown payment intent ${paymentIntentId}`,
+                    );
+                }
+                break;
+            }
             default:
                 // Other event types acked silently.
                 break;

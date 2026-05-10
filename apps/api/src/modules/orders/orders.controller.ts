@@ -82,3 +82,14 @@ export const updateOrderStatus: RequestHandler = async (req, res, next) => {
         next(err);
     }
 };
+
+export const refundOrder: RequestHandler = async (req, res, next) => {
+    try {
+        const id = String(req.params.id);
+        const result = await ordersService.refundOrder(id);
+        // Return 202 Accepted - refund is async, actual status flip via webhook
+        res.status(202).json(result);
+    } catch (err) {
+        next(err);
+    }
+};

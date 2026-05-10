@@ -12,6 +12,7 @@ import {
     createOrder,
     getOrder,
     listOrders,
+    refundOrder,
     updateOrderStatus,
 } from "./orders.controller";
 
@@ -30,3 +31,4 @@ ordersRouter.patch(
     validate(orderStatusUpdateSchema),
     updateOrderStatus,
 );
+ordersRouter.post("/:id/refund", requireAdmin, refundOrder);
