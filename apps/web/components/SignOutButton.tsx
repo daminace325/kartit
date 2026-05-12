@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { csrfFetch } from "@/lib/csrf";
 
 export default function SignOutButton({ className }: { className?: string }) {
     const router = useRouter();
@@ -10,9 +11,8 @@ export default function SignOutButton({ className }: { className?: string }) {
     async function handleClick() {
         setLoading(true);
         try {
-            await fetch("/api/auth/signout", {
+            await csrfFetch("/api/auth/signout", {
                 method: "POST",
-                credentials: "include",
             });
             router.push("/");
             router.refresh();

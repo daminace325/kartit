@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatApiError } from "@/lib/errors";
+import { csrfFetch } from "@/lib/csrf";
 
 export default function ClearCartButton() {
     const router = useRouter();
@@ -12,7 +13,7 @@ export default function ClearCartButton() {
         if (!confirm("Clear all items from your cart?")) return;
         setLoading(true);
         try {
-            const res = await fetch("/api/cart", { method: "DELETE" });
+            const res = await csrfFetch("/api/cart", { method: "DELETE" });
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
                 alert(formatApiError(data?.error, "Failed to clear cart"));

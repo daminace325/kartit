@@ -49,6 +49,13 @@ async function buildHeaders(init: FetchOptions): Promise<Headers> {
         headers.set("Content-Type", "application/json");
     }
 
+    // CSRF protection: add header for state-changing requests.
+    // GET/HEAD/OPTIONS are safe (no state change), others need the header.
+    const method = (init.method ?? "GET").toUpperCase();
+    if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
+        headers.set("X-Requested-With", "fetch");
+    }
+
     if (isServer) {
         // Forward the auth cookie from the incoming request to the API.
         // Dynamic import so this file stays usable in client components.

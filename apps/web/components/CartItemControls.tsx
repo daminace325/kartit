@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Trash2, Loader2 } from "lucide-react";
 import { formatApiError } from "@/lib/errors";
+import { csrfFetch } from "@/lib/csrf";
 
 type Props = {
     productId: string;
@@ -22,7 +23,7 @@ export default function CartItemControls({ productId, qty, stock }: Props) {
         setBusy(true);
         setError(null);
         try {
-            const res = await fetch(
+            const res = await csrfFetch(
                 `/api/cart/items/${encodeURIComponent(productId)}`,
                 {
                     method: "PATCH",
@@ -48,7 +49,7 @@ export default function CartItemControls({ productId, qty, stock }: Props) {
         setBusy(true);
         setError(null);
         try {
-            const res = await fetch(
+            const res = await csrfFetch(
                 `/api/cart/items/${encodeURIComponent(productId)}`,
                 { method: "DELETE" },
             );

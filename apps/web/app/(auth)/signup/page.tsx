@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { csrfFetch } from "@/lib/csrf";
 
 export default function SignupPage() {
     return (
@@ -29,9 +30,8 @@ function SignupForm() {
         setLoading(true);
 
         try {
-            const res = await fetch("/api/auth/signup", {
+            const res = await csrfFetch("/api/auth/signup", {
                 method: "POST",
-                credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     name: name || undefined,

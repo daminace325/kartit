@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { formatApiError } from "@/lib/errors";
+import { csrfFetch } from "@/lib/csrf";
 
 export default function DeleteProductButton({
     id,
@@ -19,7 +20,7 @@ export default function DeleteProductButton({
         if (!confirm(`Delete product "${name}"? This cannot be undone.`)) return;
         setLoading(true);
         try {
-            const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
+            const res = await csrfFetch(`/api/products/${id}`, { method: "DELETE" });
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
                 alert(formatApiError(data?.error, "Failed to delete"));

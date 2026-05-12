@@ -13,6 +13,7 @@ import {
 } from "@stripe/react-stripe-js";
 import { formatMoney, type AddressDTO } from "@repo/shared";
 import { formatApiError } from "@/lib/errors";
+import { csrfFetch } from "@/lib/csrf";
 
 type Row = {
     productId: string;
@@ -100,7 +101,7 @@ export default function CheckoutClient(props: Props) {
         setOrderError(null);
         const idempotencyKey = getCheckoutAttemptKey(checkoutAttemptStorageKey);
         try {
-            const res = await fetch("/api/orders", {
+            const res = await csrfFetch("/api/orders", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

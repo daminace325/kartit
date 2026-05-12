@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import type { OrderStatus } from "@repo/shared";
 import { formatApiError } from "@/lib/errors";
 import { ORDER_STATUS_LABELS } from "@/lib/order_status";
+import { csrfFetch } from "@/lib/csrf";
 
 // Mirrors the server-side ALLOWED_TRANSITIONS in orders.service.
 // REFUND is handled via POST /orders/:id/refund (calls Stripe), not status patch.
@@ -57,7 +58,7 @@ export default function OrderStatusControls({ orderId, currentStatus }: Props) {
                 ? undefined
                 : JSON.stringify({ status });
 
-            const res = await fetch(url, {
+            const res = await csrfFetch(url, {
                 method,
                 headers: body ? { "Content-Type": "application/json" } : undefined,
                 body,

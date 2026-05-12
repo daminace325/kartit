@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatApiError } from "@/lib/errors";
 import { PASSWORD_MIN_LENGTH, PASSWORD_RULES_TEXT } from "@/lib/auth_constants";
+import { csrfFetch } from "@/lib/csrf";
 
 export default function ChangePasswordForm() {
     const router = useRouter();
@@ -34,7 +35,7 @@ export default function ChangePasswordForm() {
 
         setLoading(true);
         try {
-            const res = await fetch("/api/auth/change-password", {
+            const res = await csrfFetch("/api/auth/change-password", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ currentPassword, newPassword }),

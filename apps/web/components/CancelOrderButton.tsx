@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, X } from "lucide-react";
 import { formatApiError } from "@/lib/errors";
+import { csrfFetch } from "@/lib/csrf";
 
 export default function CancelOrderButton({ orderId }: { orderId: string }) {
     const router = useRouter();
@@ -15,7 +16,7 @@ export default function CancelOrderButton({ orderId }: { orderId: string }) {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch(`/api/orders/${orderId}/cancel`, {
+            const res = await csrfFetch(`/api/orders/${orderId}/cancel`, {
                 method: "POST",
             });
             const data = await res.json().catch(() => ({}));

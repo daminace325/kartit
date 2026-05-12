@@ -6,6 +6,7 @@ import { Upload, X, Loader2 } from "lucide-react";
 import type { ProductDTO, ProductImageDTO } from "@repo/shared";
 import { slugify } from "@/lib/strings";
 import { formatApiError } from "@/lib/errors";
+import { csrfFetch } from "@/lib/csrf";
 
 type CategoryOption = { id: string; name: string };
 
@@ -104,7 +105,7 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
                 }
                 const formData = new FormData();
                 formData.append("file", file);
-                const res = await fetch("/api/images/upload", {
+                const res = await csrfFetch("/api/images/upload", {
                     method: "POST",
                     body: formData,
                 });
@@ -131,7 +132,7 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
         setImages((prev) => prev.filter((_, i) => i !== idx));
         // Best-effort cleanup of the orphaned Cloudinary asset (ignore errors).
         if (img?.publicId) {
-            fetch("/api/images", {
+            csrfFetch("/api/images", {
                 method: "DELETE",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ publicId: img.publicId }),
@@ -183,7 +184,7 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
                 mode === "create" ? "/api/products" : `/api/products/${initial!.id}`;
             const method = mode === "create" ? "POST" : "PUT";
 
-            const res = await fetch(url, {
+            const res = await csrfFetch(url, {
                 method,
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),

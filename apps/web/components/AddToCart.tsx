@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ShoppingCart, Check } from "lucide-react";
+import { csrfFetch } from "@/lib/csrf";
 
 export default function AddToCart({
     productId,
@@ -25,9 +26,8 @@ export default function AddToCart({
         setAdded(false);
 
         try {
-            const res = await fetch("/api/cart/items", {
+            const res = await csrfFetch("/api/cart/items", {
                 method: "POST",
-                credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ productId, quantity: qty }),
             });

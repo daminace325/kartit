@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatApiError } from "@/lib/errors";
+import { csrfFetch } from "@/lib/csrf";
 
 export default function EditProfileForm({
     initialName,
@@ -24,10 +25,9 @@ export default function EditProfileForm({
         setLoading(true);
 
         try {
-            const res = await fetch("/api/auth/me", {
+            const res = await csrfFetch("/api/auth/me", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                credentials: "include",
                 body: JSON.stringify({ name: name.trim() }),
             });
             const data = await res.json().catch(() => ({}));

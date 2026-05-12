@@ -13,6 +13,7 @@ import { cartRouter } from "./modules/cart/cart.routes";
 import { ordersRouter } from "./modules/orders/orders.routes";
 import { paymentsRouter } from "./modules/payments/payments.routes";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
+import { csrfMiddleware } from "./middlewares/csrf";
 
 // Compile WEB_ORIGINS once. Each entry is either an exact origin
 // ("https://app.example.com") or a single-`*`-wildcard host
@@ -55,6 +56,10 @@ export function createApp() {
 
     app.use(express.json());
     app.use(cookieParser());
+
+    // CSRF protection for state-changing requests.
+    // Excludes /payments (webhooks handled before this middleware).
+    app.use(csrfMiddleware);
 
     // Throttle credential endpoints to slow down brute-force / stuffing.
     const authLimiter = rateLimit({

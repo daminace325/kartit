@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { slugify } from "@/lib/strings";
 import { formatApiError } from "@/lib/errors";
+import { csrfFetch } from "@/lib/csrf";
 
 type Initial = { id: string; name: string; slug: string; parentId: string | null };
 
@@ -48,7 +49,7 @@ export default function CategoryForm({ mode, initial, parentOptions }: Props) {
                     : `/api/categories/${initial!.id}`;
             const method = mode === "create" ? "POST" : "PUT";
 
-            const res = await fetch(url, {
+            const res = await csrfFetch(url, {
                 method,
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),

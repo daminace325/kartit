@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { csrfFetch } from "@/lib/csrf";
 
 export default function SigninPage() {
     return (
@@ -28,9 +29,8 @@ function SigninForm() {
         setLoading(true);
 
         try {
-            const res = await fetch("/api/auth/signin", {
+            const res = await csrfFetch("/api/auth/signin", {
                 method: "POST",
-                credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),
             });

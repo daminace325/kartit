@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Plus, Pencil, Trash2, X } from "lucide-react";
 import type { AddressDTO, AddressInput } from "@repo/shared";
 import { formatApiError } from "@/lib/errors";
+import { csrfFetch } from "@/lib/csrf";
 
 type Mode =
     | { kind: "list" }
@@ -22,9 +23,8 @@ export default function AddressesManager({
 
     async function handleDelete(id: string) {
         if (!confirm("Delete this address?")) return;
-        const res = await fetch(`/api/auth/me/addresses/${id}`, {
+        const res = await csrfFetch(`/api/auth/me/addresses/${id}`, {
             method: "DELETE",
-            credentials: "include",
         });
         if (!res.ok) {
             const data = await res.json().catch(() => ({}));
@@ -45,10 +45,9 @@ export default function AddressesManager({
                 : `/api/auth/me/addresses/${id}`;
         const method = id === undefined ? "POST" : "PUT";
 
-        const res = await fetch(url, {
+        const res = await csrfFetch(url, {
             method,
             headers: { "Content-Type": "application/json" },
-            credentials: "include",
             body: JSON.stringify(payload),
         });
         const data = await res.json().catch(() => ({}));
