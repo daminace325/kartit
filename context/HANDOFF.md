@@ -324,7 +324,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.7 | CSRF protection | ✅ Done |
 | 1.8 | Session invalidation (tokenVersion) | ✅ Done |
 | 1.9 | Tighter rate limits | ✅ Done |
-| 1.10 | Atomic cart add/update | Pending |
+| 1.10 | Atomic cart add/update | ✅ Done |
 | 1.11 | Email case-folding (citext) | Pending |
 | 1.12 | Hot-path requireAuth cache (LRU) | Pending |
 | 1.13 | Split order creation from payment intent | Pending |
@@ -414,9 +414,11 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
   - `list` (line 274): `isAdmin ? {} : { userId }` scoped; controller requires admin to explicitly pass `?scope=all` (stronger than originally planned) ✅
 - **Note:** All address and order ownership checks were already in place; the doc was stale.
 
-#### 1.10 — Atomic cart add/update
-- Replace `findUnique → upsert` with a single `cartItem.upsert` whose `update.quantity = { increment: n }`, then validate `quantity <= product.stock` in a follow-up `updateMany` guarded by a stock check (or PG advisory lock on the cart row).
-- The TOCTOU window is in [cart.service.ts](apps/api/src/modules/cart/cart.service.ts) `addItem` — the `findProduct → findCart → upsert` sequence is not atomic. Order creation ([orders.service.ts](apps/api/src/modules/orders/orders.service.ts)) is already atomic via conditional `updateMany`, which is the correct place to guard stock. Cart-level atomicity is a nice-to-have; order-level atomicity is the correctness guarantee.
+#### 1.10 — Atomic cart add/update ✅ DONE
+- Replaced `findProduct → findCart → read quantity → upsert absolute` in `addItem` with `upsert cart → upsert cartItem { increment } → guarded clamp`.
+- The `increment` in `cartItem.upsert` closes the TOCTOU window where two concurrent requests both read the old quantity and write back an absolute value — only the database wins the increment race.
+- After increment, a guarded `updateMany` clamps to `product.stock` only if `quantity > stock` (no-op if another request already removed items). If clamped, throws `INSUFFICIENT_STOCK`.
+- Note: product stock is still read before the upsert (to know the ceiling), which is fine — the final stock guard lives in order creation via conditional `updateMany`.
 
 #### 1.11 — Email case-folding at the schema layer
 - Enable Postgres `citext` extension; change `User.email` to `@db.Citext`.

@@ -97,21 +97,30 @@ export const cartService = {
         }
 
         const cart = await getOrCreateCart(userId);
-        const existing = cart.items.find((it) => it.productId === productId);
-        const newQty = (existing?.quantity ?? 0) + quantity;
 
-        if (newQty > product.stock) {
-            throw AppError.conflict(
-                "INSUFFICIENT_STOCK",
-                `Only ${product.stock} in stock`,
-            );
-        }
-
-        await prisma.cartItem.upsert({
+        // Atomic increment avoids the TOCTOU window where two concurrent
+        // requests both read the old quantity, add their delta, and write
+        // back — only one wins with increment.
+        const item = await prisma.cartItem.upsert({
             where: { cartId_productId: { cartId: cart.id, productId } },
             create: { cartId: cart.id, productId, quantity },
-            update: { quantity: newQty },
+            update: { quantity: { increment: quantity } },
         });
+
+        // Guarded clamp: only updates if quantity still exceeds stock (another
+        // request may have removed items in between, making this a no-op).
+        if (item.quantity > product.stock) {
+            const clamped = await prisma.cartItem.updateMany({
+                where: { id: item.id, quantity: { gt: product.stock } },
+                data: { quantity: product.stock },
+            });
+            if (clamped.count > 0) {
+                throw AppError.conflict(
+                    "INSUFFICIENT_STOCK",
+                    `Only ${product.stock} in stock`,
+                );
+            }
+        }
 
         const updated = await prisma.cart.findUnique({
             where: { id: cart.id },
