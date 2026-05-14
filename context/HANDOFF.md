@@ -323,7 +323,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.6 | Abandoned-PENDING sweeper | ✅ Done |
 | 1.7 | CSRF protection | ✅ Done |
 | 1.8 | Session invalidation (tokenVersion) | ✅ Done |
-| 1.9 | Tighter rate limits | Pending |
+| 1.9 | Tighter rate limits | ✅ Done |
 | 1.10 | Atomic cart add/update | Pending |
 | 1.11 | Email case-folding (citext) | Pending |
 | 1.12 | Hot-path requireAuth cache (LRU) | Pending |
@@ -395,12 +395,12 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - `changePassword` returns `200 { user, token }` (replaces auth cookie); `signOutAll` returns `204 + clearAuthCookie`
 - `signup` and `signin` also embed `tv` and issue fresh tokens on each auth action
 
-#### 1.9 — Tighter rate limits
-- Add `express-rate-limit` to `/auth/change-password` (10/15min/user) and `POST /orders` (20/15min/user).
-- Keyed on `req.user?.id ?? req.ip` (not just IP — shared NAT collisions).
-- Body size limit: `express.json({ limit: '32kb' })`; `100kb` for `/products` admin (image arrays).
-- Current auth rate-limit: 30 req/15min on `/auth/signin` + `/auth/signup` ✅ already implemented
-- **Implementation status**: NOT YET IMPLEMENTED — rate limiters not added to change-password or orders
+#### 1.9 — Tighter rate limits ✅ DONE
+- Added `changePasswordLimiter` (10 req/15min) on `/auth/change-password`, keyed on `req.user?.id ?? ipKeyGenerator(req.ip)` to avoid shared-NAT collisions and normalize IPv6 addresses safely.
+- Added `createOrderLimiter` (20 req/15min) on `POST /orders` only (`skip` non-POST), using the same user-ID/IP keying strategy.
+- Existing auth rate-limit: 30 req/15min on `/auth/signin` + `/auth/signup` ✅ unchanged.
+- `trust proxy` enabled for correct client IP detection behind reverse proxies/load balancers.
+- Body size limits moved to item 1.18 (separate concern).
 
 #### 1.17 — IDOR vulnerabilities ✅ DONE
 - **Address CRUD**: All methods in [auth.service.ts](apps/api/src/modules/auth/auth.service.ts) verify ownership:

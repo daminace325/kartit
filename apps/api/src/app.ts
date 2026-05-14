@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import cookieParser from "cookie-parser";
 import { env } from "./config/env";
 import { healthRouter } from "./modules/health/health.routes";
@@ -70,6 +70,31 @@ export function createApp() {
     });
     app.use("/auth/signin", authLimiter);
     app.use("/auth/signup", authLimiter);
+
+    // Tighter limits for sensitive authenticated endpoints.
+    // Keyed on user ID (falling back to IP for unauthenticated) to avoid
+    // shared-NAT collisions penalizing legitimate users.
+    const authenticatedKeyGenerator = (req: express.Request) =>
+        req.user?.id ?? ipKeyGenerator(req.ip ?? "");
+
+    const changePasswordLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000,
+        limit: 10,
+        standardHeaders: "draft-7",
+        legacyHeaders: false,
+        keyGenerator: authenticatedKeyGenerator,
+    });
+    app.use("/auth/change-password", changePasswordLimiter);
+
+    const createOrderLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000,
+        limit: 20,
+        standardHeaders: "draft-7",
+        legacyHeaders: false,
+        keyGenerator: authenticatedKeyGenerator,
+        skip: (req) => req.method !== "POST",
+    });
+    app.use("/orders", createOrderLimiter);
 
     app.get("/", (req, res) => {
         res.json({ message: "API is running 🚀" });
