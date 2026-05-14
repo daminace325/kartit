@@ -87,6 +87,7 @@ Money everywhere as `BigInt` minor units, currency `Char(3)`. Never floats.
 - `20260510065250_order_address_snapshot` — Order shipping fields (name, phone, line1, line2, city, state, postalCode, country) + Address name/phone
 - `20260510071212_webhook_event_dedupe` — WebhookEvent table
 - `20260512000000_session_invalidation` — User.tokenVersion
+- `20260514174237_citext_email_case_folding` — citext extension + email type change
 
 ## File structure
 
@@ -326,7 +327,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.9 | Tighter rate limits | ✅ Done |
 | 1.10 | Atomic cart add/update | ✅ Done |
 | 1.11 | Email case-folding (citext) | ✅ Done |
-| 1.12 | Hot-path requireAuth cache (LRU) | Pending |
+| 1.12 | Hot-path requireAuth cache (LRU) | ✅ Done |
 | 1.13 | Split order creation from payment intent | Pending |
 | 1.14 | Safer uncaughtException handling | ✅ Done |
 | 1.15 | Doc/code drift cleanup | Pending |
@@ -425,10 +426,11 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - Migration `20260514174237_citext_email_case_folding`: creates `citext` extension, alters `email` to `CITEXT` type.
 - Removed three `.toLowerCase()` calls in [auth.service.ts](apps/api/src/modules/auth/auth.service.ts) (signup lookup, signup create, signin lookup) — the DB handles case folding now.
 
-#### 1.12 — Hot-path `requireAuth` cache (in-process LRU)
-- 60s TTL LRU keyed by `userId`, value `{ id, role, tokenVersion }`.
-- Invalidate on `changePassword`, `sign-out-all`, role change.
-- P2 swaps the LRU for Redis; the interface stays the same.
+#### 1.12 — Hot-path `requireAuth` cache (in-process TTL) ✅ DONE
+- Created [cache.ts](apps/api/src/lib/cache.ts) — simple `TtlCache` backed by `Map` with per-key expiry. Exports `userCache` singleton typing `{ id, role, tokenVersion }`.
+- [requireAuth.ts](apps/api/src/middlewares/requireAuth.ts): on cache hit with matching `tokenVersion`, skips the DB round-trip entirely. On miss, queries DB and populates cache (60s TTL).
+- Cache invalidation in [auth.service.ts](apps/api/src/modules/auth/auth.service.ts): `userCache.del(userId)` after `changePassword` and `signOutAll` (both bump `tokenVersion`).
+- P2 swaps `TtlCache` for Redis — the `get/set/del` interface stays identical.
 
 #### 1.13 — Split order creation from payment intent
 - Today `POST /orders` does both, which makes idempotency awkward.

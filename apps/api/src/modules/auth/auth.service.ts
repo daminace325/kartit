@@ -11,6 +11,7 @@ import { ErrorCode } from "@repo/shared";
 import { AppError } from "../../lib/errors";
 import { hashPassword, verifyPassword } from "../../lib/password";
 import { signToken } from "../../lib/jwt";
+import { userCache } from "../../lib/cache";
 
 const toPublicUser = (u: {
     id: string;
@@ -100,6 +101,7 @@ export const authService = {
             });
         });
         const token = signToken({ sub: updated.id, role: updated.role, tv: updated.tokenVersion });
+        userCache.del(userId);
         return { user: toPublicUser(updated), token };
     },
 
@@ -117,6 +119,7 @@ export const authService = {
             where: { id: userId },
             data: { tokenVersion: { increment: 1 } },
         });
+        userCache.del(userId);
     },
 
     async listAddresses(userId: string): Promise<AddressDTO[]> {
