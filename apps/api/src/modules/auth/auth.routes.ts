@@ -15,6 +15,7 @@ import {
     me,
     changePassword,
     updateProfile,
+    signOutAll,
     listAddresses,
     createAddress,
     updateAddress,
@@ -39,6 +40,7 @@ authRouter.post(
     validate(changePasswordSchema),
     changePassword,
 );
+authRouter.post("/sign-out-all", requireAuth, signOutAll);
 
 authRouter.get("/me/addresses", requireAuth, listAddresses);
 authRouter.post(

@@ -5,11 +5,13 @@ import type { UserRole } from "@repo/shared";
 export type JwtPayload = {
     sub: string; // user id
     role: UserRole;
+    tv: number; // tokenVersion
 };
 
 export function signToken(payload: JwtPayload): string {
     return jwt.sign(payload, env.JWT_SECRET, {
         expiresIn: env.JWT_EXPIRES_IN as SignOptions["expiresIn"],
+        algorithm: "HS256",
     });
 }
 

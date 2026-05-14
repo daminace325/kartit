@@ -47,6 +47,7 @@ Thumbs.db
 .vercel
 .turbo
 .cache/
+.claude
 
 # Prisma
 prisma/*.db
@@ -56,4 +57,4 @@ prisma/*.db-journal
 docker-data/
 
 # Local-only working notes / handoff docs
-context/
+# context/

@@ -17,6 +17,7 @@ const toPublicUser = (u: {
     email: string;
     name: string | null;
     role: "CUSTOMER" | "ADMIN";
+    tokenVersion: number;
 }) => ({
     id: u.id,
     email: u.email,
@@ -40,9 +41,9 @@ export const authService = {
                 passwordHash,
                 name: input.name,
             },
-            select: { id: true, email: true, name: true, role: true },
+            select: { id: true, email: true, name: true, role: true, tokenVersion: true },
         });
-        const token = signToken({ sub: user.id, role: user.role });
+        const token = signToken({ sub: user.id, role: user.role, tv: user.tokenVersion });
         return { user: toPublicUser(user), token };
     },
 
@@ -55,6 +56,7 @@ export const authService = {
                 name: true,
                 role: true,
                 passwordHash: true,
+                tokenVersion: true,
             },
         });
         if (!user) {
@@ -64,24 +66,22 @@ export const authService = {
         if (!ok) {
             throw new AppError(401, ErrorCode.INVALID_CREDENTIALS, "Invalid email or password");
         }
-        const token = signToken({ sub: user.id, role: user.role });
+        const token = signToken({ sub: user.id, role: user.role, tv: user.tokenVersion });
         return { user: toPublicUser(user), token };
     },
 
     async me(userId: string) {
-        // Existence guaranteed by requireAuth middleware.
         const user = await prisma.user.findUniqueOrThrow({
             where: { id: userId },
-            select: { id: true, email: true, name: true, role: true },
+            select: { id: true, email: true, name: true, role: true, tokenVersion: true },
         });
         return toPublicUser(user);
     },
 
     async changePassword(userId: string, input: ChangePasswordInput) {
-        // Existence guaranteed by requireAuth middleware.
         const user = await prisma.user.findUniqueOrThrow({
             where: { id: userId },
-            select: { id: true, passwordHash: true },
+            select: { id: true, passwordHash: true, tokenVersion: true, role: true },
         });
         const ok = await verifyPassword(user.passwordHash, input.currentPassword);
         if (!ok) {
@@ -92,19 +92,31 @@ export const authService = {
             );
         }
         const passwordHash = await hashPassword(input.newPassword);
-        await prisma.user.update({
-            where: { id: userId },
-            data: { passwordHash },
+        const updated = await prisma.$transaction(async (tx) => {
+            return tx.user.update({
+                where: { id: userId },
+                data: { passwordHash, tokenVersion: { increment: 1 } },
+                select: { id: true, email: true, name: true, role: true, tokenVersion: true },
+            });
         });
+        const token = signToken({ sub: updated.id, role: updated.role, tv: updated.tokenVersion });
+        return { user: toPublicUser(updated), token };
     },
 
     async updateProfile(userId: string, input: UpdateProfileInput) {
         const user = await prisma.user.update({
             where: { id: userId },
             data: { name: input.name ?? null },
-            select: { id: true, email: true, name: true, role: true },
+            select: { id: true, email: true, name: true, role: true, tokenVersion: true },
         });
         return toPublicUser(user);
+    },
+
+    async signOutAll(userId: string): Promise<void> {
+        await prisma.user.update({
+            where: { id: userId },
+            data: { tokenVersion: { increment: 1 } },
+        });
     },
 
     async listAddresses(userId: string): Promise<AddressDTO[]> {

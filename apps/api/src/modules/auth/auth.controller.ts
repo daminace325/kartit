@@ -28,7 +28,15 @@ export const me: RequestHandler = async (req, res) => {
 
 export const changePassword: RequestHandler = async (req, res) => {
     if (!req.user) throw AppError.unauthorized();
-    await authService.changePassword(req.user.id, req.body);
+    const { user, token } = await authService.changePassword(req.user.id, req.body);
+    setAuthCookie(res, token);
+    res.json({ user });
+};
+
+export const signOutAll: RequestHandler = async (req, res) => {
+    if (!req.user) throw AppError.unauthorized();
+    await authService.signOutAll(req.user.id);
+    clearAuthCookie(res);
     res.status(204).end();
 };
 

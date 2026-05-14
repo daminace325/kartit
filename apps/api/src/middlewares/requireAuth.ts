@@ -18,7 +18,7 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     const token = req.cookies?.[env.COOKIE_NAME];
     if (!token) return next(AppError.unauthorized());
 
-    let payload: { sub: string; role: UserRole };
+    let payload: { sub: string; role: UserRole; tv: number };
     try {
         payload = verifyToken(token);
     } catch {
@@ -29,12 +29,18 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     try {
         const user = await prisma.user.findUnique({
             where: { id: payload.sub },
-            select: { id: true, role: true },
+            select: { id: true, role: true, tokenVersion: true },
         });
         if (!user) {
             clearAuthCookie(res);
             return next(
                 AppError.unauthorized(ErrorCode.SESSION_INVALID, "Session is no longer valid"),
+            );
+        }
+        if (payload.tv !== user.tokenVersion) {
+            clearAuthCookie(res);
+            return next(
+                AppError.unauthorized(ErrorCode.SESSION_INVALID, "Session has been invalidated"),
             );
         }
         req.user = { id: user.id, role: user.role as UserRole };
