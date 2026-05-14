@@ -28,7 +28,7 @@ const toPublicUser = (u: {
 export const authService = {
     async signup(input: SignupInput) {
         const existing = await prisma.user.findUnique({
-            where: { email: input.email.toLowerCase() },
+            where: { email: input.email },
             select: { id: true },
         });
         if (existing) {
@@ -37,7 +37,7 @@ export const authService = {
         const passwordHash = await hashPassword(input.password);
         const user = await prisma.user.create({
             data: {
-                email: input.email.toLowerCase(),
+                email: input.email,
                 passwordHash,
                 name: input.name,
             },
@@ -49,7 +49,7 @@ export const authService = {
 
     async signin(input: SigninInput) {
         const user = await prisma.user.findUnique({
-            where: { email: input.email.toLowerCase() },
+            where: { email: input.email },
             select: {
                 id: true,
                 email: true,

@@ -325,7 +325,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.8 | Session invalidation (tokenVersion) | ✅ Done |
 | 1.9 | Tighter rate limits | ✅ Done |
 | 1.10 | Atomic cart add/update | ✅ Done |
-| 1.11 | Email case-folding (citext) | Pending |
+| 1.11 | Email case-folding (citext) | ✅ Done |
 | 1.12 | Hot-path requireAuth cache (LRU) | Pending |
 | 1.13 | Split order creation from payment intent | Pending |
 | 1.14 | Safer uncaughtException handling | ✅ Done |
@@ -420,10 +420,10 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - After increment, a guarded `updateMany` clamps to `product.stock` only if `quantity > stock` (no-op if another request already removed items). If clamped, throws `INSUFFICIENT_STOCK`.
 - Note: product stock is still read before the upsert (to know the ceiling), which is fine — the final stock guard lives in order creation via conditional `updateMany`.
 
-#### 1.11 — Email case-folding at the schema layer
-- Enable Postgres `citext` extension; change `User.email` to `@db.Citext`.
-- Drop the per-call `.toLowerCase()` and rely on the type for uniqueness.
-- Backfill migration: `UPDATE "User" SET email = lower(email)`.
+#### 1.11 — Email case-folding at the schema layer ✅ DONE
+- Enabled Postgres `citext` extension and changed `User.email` to `@db.Citext` — case-insensitive comparisons at the database level.
+- Migration `20260514174237_citext_email_case_folding`: creates `citext` extension, alters `email` to `CITEXT` type.
+- Removed three `.toLowerCase()` calls in [auth.service.ts](apps/api/src/modules/auth/auth.service.ts) (signup lookup, signup create, signin lookup) — the DB handles case folding now.
 
 #### 1.12 — Hot-path `requireAuth` cache (in-process LRU)
 - 60s TTL LRU keyed by `userId`, value `{ id, role, tokenVersion }`.
