@@ -22,13 +22,6 @@ export const categoryListQuerySchema = z.object({
 });
 export type CategoryListQuery = z.infer<typeof categoryListQuerySchema>;
 
-export type CategoryDTO = {
-    id: string;
-    slug: string;
-    name: string;
-    parentId: string | null;
-};
-
 // One image attached to a product (Cloudinary-hosted).
 // `position` is assigned server-side from the array index, so the client
 // just submits images in the order it wants them displayed.

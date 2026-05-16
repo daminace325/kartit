@@ -7,19 +7,13 @@ import { AppError } from "../lib/errors";
  * (POST, PUT, PATCH, DELETE). This header is automatically set by the
  * browser when using fetch(), but not by cross-site form submissions.
  *
- * Excludes `/payments/webhook` - Stripe sends webhooks from their servers
- * and won't include this header.
+ * Webhook endpoints are excluded via middleware ordering in app.ts (the
+ * payments router is mounted before this middleware), not by path check here.
  */
 export const csrfMiddleware: RequestHandler = (req, res, next) => {
     // Skip for safe methods (GET, HEAD, OPTIONS) - these don't modify state.
     const method = req.method.toUpperCase();
     if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
-        return next();
-    }
-
-    // Skip webhook endpoints - these are called by external services.
-    const path = req.path;
-    if (path.startsWith("/webhook") || path === "/webhook") {
         return next();
     }
 
