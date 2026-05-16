@@ -170,98 +170,68 @@ export const ordersService = {
             totalMinor: it.product.priceMinor * BigInt(it.quantity),
         }));
 
-        // 1. Create the PaymentIntent BEFORE the DB transaction. If the
-        // surrounding tx fails (e.g. concurrent stock conflict), we cancel
-        // the PI best-effort below so we don't leave orphan intents.
-        const stripe = getStripe();
-        const intent = await stripe.paymentIntents.create({
-            amount: Number(pricing.total),
-            currency: pricing.currency.toLowerCase(),
-            automatic_payment_methods: { enabled: true },
-            metadata: { userId },
-        });
-
-        let order: OrderWithItems;
-        try {
-            order = await prisma.$transaction(async (tx) => {
-                // Atomic conditional decrement per line. If any product was
-                // taken below the requested quantity by a concurrent order,
-                // updateMany returns count 0 → throw INSUFFICIENT_STOCK; the
-                // surrounding transaction rolls back any earlier decrements.
-                for (const it of itemsSnapshot) {
-                    const result = await tx.product.updateMany({
-                        where: { id: it.productId, stock: { gte: it.quantity } },
-                        data: { stock: { decrement: it.quantity } },
-                    });
-                    if (result.count !== 1) {
-                        throw AppError.conflict(
-                            "INSUFFICIENT_STOCK",
-                            `Insufficient stock for "${it.productName}"`,
-                        );
-                    }
+        const order = await prisma.$transaction(async (tx) => {
+            // Atomic conditional decrement per line. If any product was
+            // taken below the requested quantity by a concurrent order,
+            // updateMany returns count 0 → throw INSUFFICIENT_STOCK; the
+            // surrounding transaction rolls back any earlier decrements.
+            for (const it of itemsSnapshot) {
+                const result = await tx.product.updateMany({
+                    where: { id: it.productId, stock: { gte: it.quantity } },
+                    data: { stock: { decrement: it.quantity } },
+                });
+                if (result.count !== 1) {
+                    throw AppError.conflict(
+                        "INSUFFICIENT_STOCK",
+                        `Insufficient stock for "${it.productName}"`,
+                    );
                 }
+            }
 
-                const created = await tx.order.create({
-                    data: {
-                        userId,
-                        status: OrderStatus.PENDING,
-                        subtotalMinor: pricing.subtotal,
-                        shippingMinor: pricing.shipping,
-                        taxMinor: pricing.tax,
-                        totalMinor: pricing.total,
-                        currency: pricing.currency,
-                        shippingName: shippingAddress.name,
-                        shippingPhone: shippingAddress.phone,
-                        shippingLine1: shippingAddress.line1,
-                        shippingLine2: shippingAddress.line2,
-                        shippingCity: shippingAddress.city,
-                        shippingState: shippingAddress.state,
-                        shippingPostalCode: shippingAddress.postalCode,
-                        shippingCountry: shippingAddress.country ?? "",
-                        items: {
-                            create: itemsSnapshot.map((it) => ({
-                                productId: it.productId,
-                                productName: it.productName,
-                                unitPriceMinor: it.unitPriceMinor,
-                                currency: it.currency,
-                                quantity: it.quantity,
-                                totalMinor: it.totalMinor,
-                            })),
-                        },
-                        payments: {
-                            create: {
-                                providerPaymentId: intent.id,
-                                status: PaymentStatus.REQUIRES_PAYMENT,
-                                amountMinor: pricing.total,
-                                currency: pricing.currency,
-                            },
+            const created = await tx.order.create({
+                data: {
+                    userId,
+                    status: OrderStatus.PENDING,
+                    subtotalMinor: pricing.subtotal,
+                    shippingMinor: pricing.shipping,
+                    taxMinor: pricing.tax,
+                    totalMinor: pricing.total,
+                    currency: pricing.currency,
+                    shippingName: shippingAddress.name,
+                    shippingPhone: shippingAddress.phone,
+                    shippingLine1: shippingAddress.line1,
+                    shippingLine2: shippingAddress.line2,
+                    shippingCity: shippingAddress.city,
+                    shippingState: shippingAddress.state,
+                    shippingPostalCode: shippingAddress.postalCode,
+                    shippingCountry: shippingAddress.country ?? "",
+                    items: {
+                        create: itemsSnapshot.map((it) => ({
+                            productId: it.productId,
+                            productName: it.productName,
+                            unitPriceMinor: it.unitPriceMinor,
+                            currency: it.currency,
+                            quantity: it.quantity,
+                            totalMinor: it.totalMinor,
+                        })),
+                    },
+                    payments: {
+                        create: {
+                            status: PaymentStatus.REQUIRES_PAYMENT,
+                            amountMinor: pricing.total,
+                            currency: pricing.currency,
                         },
                     },
-                    include: ORDER_INCLUDE,
-                });
-
-                await tx.cartItem.deleteMany({ where: { cartId } });
-
-                return created;
+                },
+                include: ORDER_INCLUDE,
             });
-        } catch (err) {
-            // Best-effort cancellation so we don't leak an unconsumable PI.
-            stripe.paymentIntents
-                .cancel(intent.id)
-                .catch((e: unknown) => console.error("stripe cancel failed", e));
-            throw err;
-        }
 
-        // Best-effort: attach the now-known orderId so the webhook can
-        // resolve the order even if the providerPaymentId lookup ever drifts.
-        stripe.paymentIntents
-            .update(intent.id, { metadata: { userId, orderId: order.id } })
-            .catch((e: unknown) => console.error("stripe metadata update failed", e));
+            await tx.cartItem.deleteMany({ where: { cartId } });
 
-        return {
-            order: toOrderDTO(order),
-            clientSecret: intent.client_secret ?? undefined,
-        };
+            return created;
+        });
+
+        return { order: toOrderDTO(order) };
     },
 
     async list(

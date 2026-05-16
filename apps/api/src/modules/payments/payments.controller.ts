@@ -1,10 +1,12 @@
 import type { RequestHandler } from "express";
 import { Prisma, prisma } from "@repo/db";
 import type Stripe from "stripe";
+import type { PaymentIntentInput } from "@repo/shared";
 import { env } from "../../config/env";
 import { AppError } from "../../lib/errors";
 import { getStripe } from "../../lib/stripe";
 import { ordersService } from "../orders/orders.service";
+import { paymentsService } from "./payments.service";
 
 /**
  * Stripe webhook receiver. Mounted with `express.raw({ type: "application/json" })`
@@ -129,6 +131,21 @@ export const stripeWebhook: RequestHandler = async (req, res, next) => {
         // Always 200 after successful verification + handling so Stripe
         // does not retry. Errors thrown above land in the global handler.
         res.json({ received: true });
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const createPaymentIntent: RequestHandler = async (req, res, next) => {
+    try {
+        const user = req.user;
+        if (!user) throw AppError.unauthorized();
+        const { orderId } = req.body as PaymentIntentInput;
+        const result = await paymentsService.createPaymentIntent(
+            orderId,
+            user.id,
+        );
+        res.status(201).json(result);
     } catch (err) {
         next(err);
     }

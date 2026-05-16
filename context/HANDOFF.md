@@ -130,7 +130,7 @@ ecomm/
           images/                ← POST /images/upload + DELETE /images
           cart/                  ← /cart GET, add, update, remove, clear
           orders/                ← /orders create, list, detail, cancel; admin status transitions
-          payments/              ← /payments/webhook (raw body); /payments/intent planned in P1.13
+          payments/              ← /payments/webhook (raw body), /payments/intent (create PI for order)
         app.ts                   ← createApp(): trust-proxy, helmet, multi-origin CORS,
                                    /payments mounted BEFORE express.json() (raw webhook),
                                    auth rate-limit, all routers
@@ -202,7 +202,8 @@ ecomm/
 - **Zod v4:** `ZodSchema` is deprecated → use `ZodType`.
 - **Web cannot import from `apps/api`** — only from `@repo/shared`. `@repo/db` is server-only.
 - **Refresh tokens deferred to P2** — single JWT in httpOnly cookie, 7d expiry.
-- **Stripe webhook MUST be mounted BEFORE `express.json()`** in [app.ts](apps/api/src/app.ts) so signature verification sees the raw body. Router-local `express.raw()` parses it.
+- **Stripe webhook MUST be mounted BEFORE `express.json()`** in [app.ts](apps/api/src/app.ts) so signature verification sees the raw body. Router-local `express.raw()` parses it. The `/payments/intent` route in the same router supplies its own `express.json()` + `cookieParser()` since the global ones haven't run yet.
+- **Checkout is now two-step:** `POST /orders` creates the PENDING order (reserves stock); `POST /payments/intent` creates the Stripe PaymentIntent. Both accept `Idempotency-Key` (frontend uses `${base}:order` and `${base}:intent`).
 - **CORS:** `WEB_ORIGINS` (plural) is the env var. Each entry is exact origin or single-`*`-host wildcard. Compiled into matchers once at boot.
 - **`trust proxy: 1`** is set so Render's LB gives correct `req.secure` / `req.ip` and the `Secure` cookie attribute behaves.
 - **Auth rate-limit:** 30 req / 15 min on `/auth/signin` + `/auth/signup` (`express-rate-limit`, draft-7 headers).
@@ -301,6 +302,7 @@ POST   /orders/:id/cancel
 PATCH  /orders/:id/status      (admin: PROCESSING / SHIPPED / DELIVERED) — NOT REFUNDED
 POST   /orders/:id/refund      (admin: calls Stripe, returns 202 with refundId)
 
+POST   /payments/intent        (create Stripe PI for order, idempotent, rate-limited)
 POST   /payments/webhook       Stripe signed webhook (raw body) → handles succeeded, failed, refunded
 ```
 
@@ -328,7 +330,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.10 | Atomic cart add/update | ✅ Done |
 | 1.11 | Email case-folding (citext) | ✅ Done |
 | 1.12 | Hot-path requireAuth cache (LRU) | ✅ Done |
-| 1.13 | Split order creation from payment intent | Pending |
+| 1.13 | Split order creation from payment intent | ✅ Done |
 | 1.14 | Safer uncaughtException handling | ✅ Done |
 | 1.15 | Doc/code drift cleanup | Pending |
 | 1.16 | Missing admin guards on write endpoints | ✅ Done (was already in code, doc was stale) |
@@ -432,11 +434,13 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - Cache invalidation in [auth.service.ts](apps/api/src/modules/auth/auth.service.ts): `userCache.del(userId)` after `changePassword` and `signOutAll` (both bump `tokenVersion`).
 - P2 swaps `TtlCache` for Redis — the `get/set/del` interface stays identical.
 
-#### 1.13 — Split order creation from payment intent
-- Today `POST /orders` does both, which makes idempotency awkward.
-- Refactor: `POST /orders` = create PENDING order + reserve stock; `POST /payments/intent` = create/return PI for a given orderId.
-- Both endpoints take `Idempotency-Key`. Refresh / 3DS / re-attempt becomes safe.
-- Update `CheckoutClient.tsx` to call them in sequence.
+#### 1.13 — Split order creation from payment intent ✅ DONE
+- **`POST /orders`** now only creates the PENDING order + deducts stock + clears cart. Returns `{ order }` without a client secret. The Payment row is created with `providerPaymentId: null`.
+- **`POST /payments/intent`** (new endpoint) creates a Stripe PaymentIntent for an existing PENDING order, stores the PI id on the Payment row, and returns `{ clientSecret, order }`. Both endpoints accept `Idempotency-Key`.
+- **New files:** `apps/api/src/modules/payments/payments.service.ts` with `createPaymentIntent(orderId, userId)`.
+- **Frontend:** `CheckoutClient.tsx` now calls the two endpoints in sequence with distinct idempotency keys (`${baseKey}:order` and `${baseKey}:intent`).
+- **Rate limiting:** `POST /payments/intent` has its own rate limiter (20 req/15min, keyed by user ID).
+- The abandoned-PENDING sweeper already handles orders without a linked PI — no changes needed.
 
 #### 1.14 — Safer `uncaughtException` handling ✅ DONE
 - [server.ts](apps/api/src/server.ts): `uncaughtException` logs + calls `shutdown()` → `server.close()` + 10s hard-exit safety net (`setTimeout(() => process.exit(1), 10_000).unref()`)

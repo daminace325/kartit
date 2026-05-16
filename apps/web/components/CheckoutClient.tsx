@@ -99,26 +99,54 @@ export default function CheckoutClient(props: Props) {
         }
         setCreating(true);
         setOrderError(null);
-        const idempotencyKey = getCheckoutAttemptKey(checkoutAttemptStorageKey);
+        const baseKey = getCheckoutAttemptKey(checkoutAttemptStorageKey);
         try {
-            const res = await csrfFetch("/api/orders", {
+            // Step 1 — create the order (stock is reserved, cart is cleared).
+            const orderRes = await csrfFetch("/api/orders", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Idempotency-Key": idempotencyKey,
+                    "Idempotency-Key": `${baseKey}:order`,
                 },
                 body: JSON.stringify({ shippingAddressId: selectedAddressId }),
             });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                setOrderError(formatApiError(data?.error, "Failed to start checkout"));
+            const orderData = await orderRes.json().catch(() => ({}));
+            if (!orderRes.ok) {
+                setOrderError(
+                    formatApiError(orderData?.error, "Failed to create order"),
+                );
                 return;
             }
-            if (!data?.clientSecret || !data?.order?.id) {
+            const orderId = orderData?.order?.id;
+            if (!orderId) {
+                setOrderError("Order created but no ID returned.");
+                return;
+            }
+
+            // Step 2 — create the Stripe PaymentIntent for this order.
+            const intentRes = await csrfFetch("/api/payments/intent", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Idempotency-Key": `${baseKey}:intent`,
+                },
+                body: JSON.stringify({ orderId }),
+            });
+            const intentData = await intentRes.json().catch(() => ({}));
+            if (!intentRes.ok) {
+                setOrderError(
+                    formatApiError(
+                        intentData?.error,
+                        "Failed to initialize payment",
+                    ),
+                );
+                return;
+            }
+            if (!intentData?.clientSecret) {
                 setOrderError("Payment provider did not return a client secret.");
                 return;
             }
-            setOrder({ id: data.order.id, clientSecret: data.clientSecret });
+            setOrder({ id: orderId, clientSecret: intentData.clientSecret });
         } catch {
             setOrderError("Network error. Please try again.");
         } finally {

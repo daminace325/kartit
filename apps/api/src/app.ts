@@ -49,6 +49,22 @@ export function createApp() {
         }),
     );
 
+    // Key generator for authenticated endpoints: keys on user ID with
+    // fallback to IP, avoiding shared-NAT collisions.
+    const authenticatedKeyGenerator = (req: express.Request) =>
+        req.user?.id ?? ipKeyGenerator(req.ip ?? "");
+
+    // Rate-limit payment intent creation. Must be mounted BEFORE the payments
+    // router so it runs before the route handler.
+    const paymentIntentLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000,
+        limit: 20,
+        standardHeaders: "draft-7",
+        legacyHeaders: false,
+        keyGenerator: authenticatedKeyGenerator,
+    });
+    app.use("/payments/intent", paymentIntentLimiter);
+
     // Stripe webhook MUST see the raw request body for signature verification.
     // Mount it BEFORE express.json() so the global JSON parser doesn't consume
     // the body. The router-local express.raw() in payments.routes.ts handles parsing.
@@ -72,11 +88,6 @@ export function createApp() {
     app.use("/auth/signup", authLimiter);
 
     // Tighter limits for sensitive authenticated endpoints.
-    // Keyed on user ID (falling back to IP for unauthenticated) to avoid
-    // shared-NAT collisions penalizing legitimate users.
-    const authenticatedKeyGenerator = (req: express.Request) =>
-        req.user?.id ?? ipKeyGenerator(req.ip ?? "");
-
     const changePasswordLimiter = rateLimit({
         windowMs: 15 * 60 * 1000,
         limit: 10,

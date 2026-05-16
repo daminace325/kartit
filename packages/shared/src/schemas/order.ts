@@ -6,6 +6,11 @@ export const orderCreateSchema = z.object({
 });
 export type OrderCreateInput = z.infer<typeof orderCreateSchema>;
 
+export const paymentIntentSchema = z.object({
+    orderId: z.string().min(1),
+});
+export type PaymentIntentInput = z.infer<typeof paymentIntentSchema>;
+
 export const orderListQuerySchema = z.object({
     cursor: z.string().min(1).optional(),
     limit: z.coerce.number().int().min(1).max(50).default(20),
@@ -68,9 +73,11 @@ export type OrderDTO = {
 
 export type CreateOrderResponse = {
     order: OrderDTO;
-    // Stripe PaymentIntent client secret used by web to confirm payment.
-    // Filled in sub-phase 1.8; optional for now.
-    clientSecret?: string;
+};
+
+export type PaymentIntentResponse = {
+    clientSecret: string;
+    order: OrderDTO;
 };
 
 export type OrderListResponse = {
