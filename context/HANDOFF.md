@@ -148,7 +148,7 @@ ecomm/
           search/                ← search results
           cart/                  ← cart page
           checkout/              ← checkout (uses CheckoutClient)
-          orders/                ← order list + detail + cancel
+          orders/                ← order list + detail + cancel + pay (deferred payment for PENDING orders)
           account/               ← account hub
           profile/               ← edit profile, change password, addresses
         admin/
@@ -349,7 +349,8 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
   - Caches 2xx responses for 24h, replays on retry
   - Stale IN_PROGRESS claims cleaned up so crashed processes don't block checkout
 - **Frontend:** `getCheckoutAttemptKey()` in `CheckoutClient.tsx`
-- **Bug fix applied:** Removed `sessionStorage.removeItem()` after order creation — key now persists so payment-failed retries return cached response instead of creating duplicate orders
+  - Key is cached in `sessionStorage` keyed by cart fingerprint so refreshes during checkout return the same idempotency key and the backend replays the cached response.
+  - Key is cleared in `PayForm.onSubmit` just before `stripe.confirmPayment()` — prevents the next checkout visit from replaying stale cached responses (which would return a client secret for a now-terminal PaymentIntent).
 
 #### 1.2 — Order address snapshot ✅ DONE
 - **Schema:** Order has `shippingName`, `shippingPhone`, `shippingLine1`, `shippingLine2?`, `shippingCity`, `shippingState?`, `shippingPostalCode`, `shippingCountry`
@@ -441,6 +442,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - **Frontend:** `CheckoutClient.tsx` now calls the two endpoints in sequence with distinct idempotency keys (`${baseKey}:order` and `${baseKey}:intent`).
 - **Rate limiting:** `POST /payments/intent` has its own rate limiter (20 req/15min, keyed by user ID).
 - The abandoned-PENDING sweeper already handles orders without a linked PI — no changes needed.
+- **Companion fix:** Order detail page PENDING banner now links to `/orders/[id]/pay` (new Next.js page at `apps/web/app/(public)/orders/[id]/pay/page.tsx`) instead of `/checkout` (dead end — cart is already cleared). The new page calls `POST /api/payments/intent` internally and renders Stripe Elements so users can resume payment for an existing PENDING order.
 
 #### 1.14 — Safer `uncaughtException` handling ✅ DONE
 - [server.ts](apps/api/src/server.ts): `uncaughtException` logs + calls `shutdown()` → `server.close()` + 10s hard-exit safety net (`setTimeout(() => process.exit(1), 10_000).unref()`)
@@ -474,7 +476,6 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - **Fix**: Create `apps/api/src/lib/logger.ts` with `logger.info/warn/error` that wraps `console.*` for now. Replace all direct `console.*` calls with `logger.*`. Adds zero dependencies and makes P2.10 trivial.
 
 #### 1.15 — Doc/code drift cleanup
-- **`POST /payments/intent`**: Not in the API surface yet — will add when 1.13 lands (split order creation from payment intent).
 - **Cloudinary drift**: multer `/images/upload` is current; `/images/sign` (signed direct-from-browser upload) remains the hardening target for Phase 1.
 - **Route drift**: All documented routes (`GET /categories/slug/:slug`, `GET /products/slug/:slug`, public `GET /products/:id`) are in use. No drift found.
 - **Public inactive product leak**: `GET /products/:id` in [products.service.ts:101-107](apps/api/src/modules/products/products.service.ts#L101-L107) — `getById` doesn't check `isActive`. Unauthenticated users can view inactive products by guessing IDs. Fix: add `isActive: true` to the query or require auth.

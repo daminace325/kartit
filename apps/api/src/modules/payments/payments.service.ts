@@ -1,7 +1,6 @@
 import { prisma } from "@repo/db";
 import {
     OrderStatus,
-    PaymentStatus,
     type PaymentIntentResponse,
 } from "@repo/shared";
 import { AppError } from "../../lib/errors";
@@ -45,19 +44,22 @@ export const paymentsService = {
             );
         }
 
-        // If a PaymentIntent was already created, return the order so the
-        // frontend can use the cached idempotency response. We re-fetch the
-        // full order DTO via the orders service for consistency.
+        // If a PaymentIntent was already created and is still usable,
+        // return it so the frontend can replay the cached idempotency
+        // response. Terminal PaymentIntents cannot initialize Elements,
+        // so fall through to create a new one.
         if (payment.providerPaymentId) {
             const stripe = getStripe();
             const intent = await stripe.paymentIntents.retrieve(
                 payment.providerPaymentId,
             );
-            const dto = await ordersService.getById(userId, false, orderId);
-            return {
-                clientSecret: intent.client_secret!,
-                order: dto,
-            };
+            if (intent.status !== "succeeded" && intent.status !== "canceled") {
+                const dto = await ordersService.getById(userId, false, orderId);
+                return {
+                    clientSecret: intent.client_secret!,
+                    order: dto,
+                };
+            }
         }
 
         const stripe = getStripe();

@@ -296,7 +296,12 @@ export default function CheckoutClient(props: Props) {
                                     appearance: { theme: "night" },
                                 }}
                             >
-                                <PayForm orderId={order.id} totalMinor={totalMinor} currency={currency} />
+                                <PayForm
+                                    orderId={order.id}
+                                    totalMinor={totalMinor}
+                                    currency={currency}
+                                    checkoutAttemptStorageKey={checkoutAttemptStorageKey}
+                                />
                             </Elements>
                         )}
                     </div>
@@ -355,10 +360,12 @@ function PayForm({
     orderId,
     totalMinor,
     currency,
+    checkoutAttemptStorageKey,
 }: {
     orderId: string;
     totalMinor: string;
     currency: string;
+    checkoutAttemptStorageKey: string;
 }) {
     const stripe = useStripe();
     const elements = useElements();
@@ -366,8 +373,6 @@ function PayForm({
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // After confirmPayment we briefly land back here; the webhook will mark
-    // the order PAID. Redirect into the order detail page.
     useEffect(() => {
         if (!stripe) return;
         const url = new URL(window.location.href);
@@ -390,6 +395,12 @@ function PayForm({
         setSubmitting(true);
         setError(null);
 
+        // Once the user submits payment we no longer need the idempotency
+        // key for this checkout attempt. Clearing it here means a subsequent
+        // checkout visit always generates a fresh key, avoiding stale
+        // idempotency replays that would return a terminal PaymentIntent.
+        window.sessionStorage.removeItem(checkoutAttemptStorageKey);
+
         const { error: stripeError } = await stripe.confirmPayment({
             elements,
             confirmParams: {
@@ -401,7 +412,6 @@ function PayForm({
             setError(stripeError.message ?? "Payment failed");
             setSubmitting(false);
         }
-        // On success the browser is redirected to return_url; nothing else to do.
     }
 
     return (

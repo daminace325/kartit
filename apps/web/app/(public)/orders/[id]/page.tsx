@@ -26,10 +26,14 @@ function formatDateTime(iso: string) {
 
 export default async function OrderDetailPage({
     params,
+    searchParams,
 }: {
     params: Promise<{ id: string }>;
+    searchParams: Promise<{ redirect_status?: string }>;
 }) {
     const { id } = await params;
+    const { redirect_status: redirectStatus } = await searchParams;
+    const justPaid = redirectStatus === "succeeded";
     const user = await getCurrentUser();
     if (!user) redirect(`/signin?next=/orders/${id}`);
 
@@ -76,15 +80,20 @@ export default async function OrderDetailPage({
                 {canCancel && <CancelOrderButton orderId={order.id} />}
             </div>
 
-            {order.status === "PENDING" && (
+            {order.status === "PENDING" && justPaid && (
+                <section className="mt-6 rounded-md border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+                    Payment received — confirming with your bank. This page will
+                    update automatically; refresh if it doesn&apos;t.
+                </section>
+            )}
+            {order.status === "PENDING" && !justPaid && (
                 <section className="mt-6 rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
-                    Payment hasn&apos;t been confirmed yet. If you closed the checkout
-                    window, you can{" "}
+                    Payment hasn&apos;t been confirmed yet.{" "}
                     <Link
-                        href="/checkout"
+                        href={`/orders/${encodeURIComponent(order.id)}/pay`}
                         className="font-medium underline hover:text-amber-50"
                     >
-                        return to checkout
+                        Complete payment
                     </Link>{" "}
                     or cancel this order.
                 </section>
