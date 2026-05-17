@@ -281,7 +281,7 @@ DELETE /categories/:id         (admin)
 
 GET    /products               (q?, categoryId?, cursor?, limit?)
 GET    /products/slug/:slug
-GET    /products/:id           ⚠ public but no isActive check (P1.15)
+GET    /products/:id
 POST   /products               (admin)
 PUT    /products/:id           (admin)
 DELETE /products/:id           (admin)
@@ -335,10 +335,10 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.15 | Doc/code drift cleanup | ✅ Done |
 | 1.16 | Missing admin guards on write endpoints | ✅ Done (was already in code, doc was stale) |
 | 1.17 | IDOR vulnerabilities | ✅ Done (was already in code, doc was stale) |
-| 1.19 | Missing zod validation on image routes | 🔴 NEW GAP - not in original plan |
-| 1.20 | JWT_SECRET min length only enforced in prod | 🔴 NEW GAP - not in original plan |
-| 1.21 | .gitignore ignores .editorconfig | 🔴 NEW GAP — repo polish |
-| 1.22 | Console.log/error → structured logging prep | 🔴 NEW GAP — prep for P2.10 |
+| 1.18 | Missing zod validation on image routes | 🔴 NEW GAP - not in original plan |
+| 1.19 | JWT_SECRET min length only enforced in prod | 🔴 NEW GAP - not in original plan |
+| 1.20 | .gitignore ignores .editorconfig | 🔴 NEW GAP — repo polish |
+| 1.21 | Console.log/error → structured logging prep | 🔴 NEW GAP — prep for P2.10 |
 
 ### Tier S — correctness & money-safety (do these first, in order)
 
@@ -404,18 +404,6 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - Existing auth rate-limit: 30 req/15min on `/auth/signin` + `/auth/signup` ✅ unchanged.
 - `trust proxy` enabled for correct client IP detection behind reverse proxies/load balancers.
 
-#### 1.17 — IDOR vulnerabilities ✅ DONE
-- **Address CRUD**: All methods in [auth.service.ts](apps/api/src/modules/auth/auth.service.ts) verify ownership:
-  - `listAddresses` (line 122-128): filters `where: { userId }` ✅
-  - `createAddress` (line 130-145): scopes to `userId` from auth token ✅
-  - `updateAddress` (line 147-172): fetches existing address, checks `existing.userId !== userId` → throws NOT_FOUND ✅
-  - `deleteAddress` (line 175-184): same ownership check before delete ✅
-- **Order access**: All guarded in [orders.service.ts](apps/api/src/modules/orders/orders.service.ts):
-  - `getById` (line 300-301): `!isAdmin && order.userId !== userId` → forbidden ✅
-  - `cancel` (line 320): `!isAdmin && existing.userId !== userId` → forbidden ✅
-  - `list` (line 274): `isAdmin ? {} : { userId }` scoped; controller requires admin to explicitly pass `?scope=all` (stronger than originally planned) ✅
-- **Note:** All address and order ownership checks were already in place; the doc was stale.
-
 #### 1.10 — Atomic cart add/update ✅ DONE
 - Replaced `findProduct → findCart → read quantity → upsert absolute` in `addItem` with `upsert cart → upsert cartItem { increment } → guarded clamp`.
 - The `increment` in `cartItem.upsert` closes the TOCTOU window where two concurrent requests both read the old quantity and write back an absolute value — only the database wins the increment race.
@@ -447,34 +435,13 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - `SIGINT`/`SIGTERM` also call `shutdown()` for consistent graceful shutdown
 - `unhandledRejection` logs but does not crash (async errors surface there; let them be caught by errorHandler)
 
-#### 1.19 — Missing zod validation on image routes
-- **`POST /images/upload`** ([images.routes.ts:11](apps/api/src/modules/images/images.routes.ts#L11)): Only multer validates the file (type + size). No zod validation on the request body/metadata.
-- **`DELETE /images`** ([images.routes.ts:12](apps/api/src/modules/images/images.routes.ts#L12)): Controller does manual `typeof publicId !== "string"` check instead of using the zod validation pipeline — inconsistent with every other mutation endpoint.
-- **Fix**: Add `validate(deleteImageSchema)` to `DELETE /images` route. For `POST /images/upload`, multer handles the file validation; consider adding a body schema if metadata fields are added later.
-
-#### 1.20 — JWT_SECRET minimum length only enforced in production
-- **Current**: [env.ts:32](apps/api/src/config/env.ts#L32) — `if (isProd && JWT_SECRET.length < 32)` — the check is conditional on `isProd`.
-- **Risk**: In development/staging, `JWT_SECRET` can be 1 character. Since JWT uses HS256 (symmetric), a weak secret trivially allows token forgery.
-- **Fix**: Make the 32-char minimum check unconditional (remove `isProd` guard). A short secret is a security bug in any environment.
-
-#### 1.21 — `.gitignore` ignores `.editorconfig`
-- **Current**: [.gitignore:37](.gitignore#L37) — `.editorconfig` is listed under "Editor / OS" ignores.
-- **Context**: The HANDOFF says "stop ignoring `.editorconfig` at minimum" if the repo is going to GitHub for resume review. The file enforces 4-space indentation and LF line endings project-wide.
-- **Fix**: Remove `.editorconfig` from `.gitignore`. Also review whether `context/` (line 60) should remain ignored or be committed (handoff docs may be useful to reviewers).
-
-#### 1.22 — Console.log/error usage → structured logging prep
-- **20 instances** across `apps/api/src/` — [server.ts](apps/api/src/server.ts) (4×), [errorHandler.ts](apps/api/src/middlewares/errorHandler.ts) (1×), [idempotency.ts](apps/api/src/middlewares/idempotency.ts) (3×), [cloudinary.ts](apps/api/src/lib/cloudinary.ts) (1×), [payments.controller.ts](apps/api/src/modules/payments/payments.controller.ts) (3×), [orders.service.ts](apps/api/src/modules/orders/orders.service.ts) (2×), [sweepAbandonedOrders.ts](apps/api/src/jobs/sweepAbandonedOrders.ts) (5×).
-- **Issue**: No correlation IDs, no structured metadata, no timestamp formatting — makes production debugging harder. The `console.warn` calls in the payments controller for unknown PaymentIntents are especially concerning.
-- **P2.10** already plans `pino` + `AsyncLocalStorage` for request_id. P1 should at minimum add a thin `logger` wrapper (just `console`-backed for now) so all logging goes through one interface, making the P2 swap to pino a one-line change.
-- **Fix**: Create `apps/api/src/lib/logger.ts` with `logger.info/warn/error` that wraps `console.*` for now. Replace all direct `console.*` calls with `logger.*`. Adds zero dependencies and makes P2.10 trivial.
-
 #### 1.15 — Doc/code drift cleanup ✅ DONE
 - **Cloudinary drift**: multer `/images/upload` is current; `/images/sign` (signed direct-from-browser upload) remains the hardening target for Phase 1. No change needed.
 - **Route drift**: All documented routes verified in code — no drift found.
 - **Public inactive product leak**: Fixed — `getById` now queries `where: { id, isActive: true }` so unauthenticated users cannot discover inactive products by ID enumeration.
 - **CORS error handling**: Fixed — replaced `cb(new Error(...))` with `cb(null, false)` for clean 4xx responses without polluting error logs.
-- **Body size limits (1.18)**: Removed from plan — unnecessary with multer handling file uploads and express.json defaults being reasonable for API payloads.
-- **Repo polish**: `.gitignore` still ignores `.editorconfig` — tracked separately as item 1.21.
+- **Body size limits**: Removed from plan — unnecessary with multer handling file uploads and express.json defaults being reasonable for API payloads.
+- **Repo polish**: `.gitignore` still ignores `.editorconfig` — tracked separately as item 1.20.
 
 #### 1.16 — Missing admin guards on write endpoints ✅ DONE
 - **Images**: [images.routes.ts:9](apps/api/src/modules/images/images.routes.ts#L9) — `imagesRouter.use(requireAuth, requireAdmin)` applies to entire router ✅
@@ -483,9 +450,42 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - **Orders status/refund**: [orders.routes.ts:30,34](apps/api/src/modules/orders/orders.routes.ts#L30) — `PATCH /:id/status` and `POST /:id/refund` both include `requireAdmin` ✅
 - **Note:** This was already implemented in code when the HANDOFF was written; the doc was stale.
 
+#### 1.17 — IDOR vulnerabilities ✅ DONE
+- **Address CRUD**: All methods in [auth.service.ts](apps/api/src/modules/auth/auth.service.ts) verify ownership:
+  - `listAddresses` (line 122-128): filters `where: { userId }` ✅
+  - `createAddress` (line 130-145): scopes to `userId` from auth token ✅
+  - `updateAddress` (line 147-172): fetches existing address, checks `existing.userId !== userId` → throws NOT_FOUND ✅
+  - `deleteAddress` (line 175-184): same ownership check before delete ✅
+- **Order access**: All guarded in [orders.service.ts](apps/api/src/modules/orders/orders.service.ts):
+  - `getById` (line 300-301): `!isAdmin && order.userId !== userId` → forbidden ✅
+  - `cancel` (line 320): `!isAdmin && existing.userId !== userId` → forbidden ✅
+  - `list` (line 274): `isAdmin ? {} : { userId }` scoped; controller requires admin to explicitly pass `?scope=all` (stronger than originally planned) ✅
+- **Note:** All address and order ownership checks were already in place; the doc was stale.
+
+#### 1.18 — Missing zod validation on image routes
+- **`POST /images/upload`** ([images.routes.ts:11](apps/api/src/modules/images/images.routes.ts#L11)): Only multer validates the file (type + size). No zod validation on the request body/metadata.
+- **`DELETE /images`** ([images.routes.ts:12](apps/api/src/modules/images/images.routes.ts#L12)): Controller does manual `typeof publicId !== "string"` check instead of using the zod validation pipeline — inconsistent with every other mutation endpoint.
+- **Fix**: Add `validate(deleteImageSchema)` to `DELETE /images` route. For `POST /images/upload`, multer handles the file validation; consider adding a body schema if metadata fields are added later.
+
+#### 1.19 — JWT_SECRET minimum length only enforced in production
+- **Current**: [env.ts:32](apps/api/src/config/env.ts#L32) — `if (isProd && JWT_SECRET.length < 32)` — the check is conditional on `isProd`.
+- **Risk**: In development/staging, `JWT_SECRET` can be 1 character. Since JWT uses HS256 (symmetric), a weak secret trivially allows token forgery.
+- **Fix**: Make the 32-char minimum check unconditional (remove `isProd` guard). A short secret is a security bug in any environment.
+
+#### 1.20 — `.gitignore` ignores `.editorconfig`
+- **Current**: [.gitignore:37](.gitignore#L37) — `.editorconfig` is listed under "Editor / OS" ignores.
+- **Context**: The HANDOFF says "stop ignoring `.editorconfig` at minimum" if the repo is going to GitHub for resume review. The file enforces 4-space indentation and LF line endings project-wide.
+- **Fix**: Remove `.editorconfig` from `.gitignore`. Also review whether `context/` (line 60) should remain ignored or be committed (handoff docs may be useful to reviewers).
+
+#### 1.21 — Console.log/error usage → structured logging prep
+- **20 instances** across `apps/api/src/` — [server.ts](apps/api/src/server.ts) (4×), [errorHandler.ts](apps/api/src/middlewares/errorHandler.ts) (1×), [idempotency.ts](apps/api/src/middlewares/idempotency.ts) (3×), [cloudinary.ts](apps/api/src/lib/cloudinary.ts) (1×), [payments.controller.ts](apps/api/src/modules/payments/payments.controller.ts) (3×), [orders.service.ts](apps/api/src/modules/orders/orders.service.ts) (2×), [sweepAbandonedOrders.ts](apps/api/src/jobs/sweepAbandonedOrders.ts) (5×).
+- **Issue**: No correlation IDs, no structured metadata, no timestamp formatting — makes production debugging harder. The `console.warn` calls in the payments controller for unknown PaymentIntents are especially concerning.
+- **P2.10** already plans `pino` + `AsyncLocalStorage` for request_id. P1 should at minimum add a thin `logger` wrapper (just `console`-backed for now) so all logging goes through one interface, making the P2 swap to pino a one-line change.
+- **Fix**: Create `apps/api/src/lib/logger.ts` with `logger.info/warn/error` that wraps `console.*` for now. Replace all direct `console.*` calls with `logger.*`. Adds zero dependencies and makes P2.10 trivial.
+
 ### Tier A — visible polish & differentiators
 
-#### 1.23 — Test suite (this is the single biggest credibility lift)
+#### 1.22 — Test suite (this is the single biggest credibility lift)
 - Before wiring CI, fix the current web lint failures:
   - `CartBadge.tsx`: `react-hooks/set-state-in-effect` from `setCount(0)` inside the effect.
   - `CheckoutClient.tsx`: unused `Link` import.
@@ -499,68 +499,68 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - Pure unit tests for `pricing.ts`, `money.ts`, status-transition table.
 - Playwright e2e in `apps/web/e2e/`: signup → add to cart → checkout with Stripe test card → see paid order.
 
-#### 1.24 — GitHub Actions CI
+#### 1.23 — GitHub Actions CI
 - `.github/workflows/ci.yml`: matrix `lint` → `typecheck` → `test:api` (with PG service container) → `test:web` → `build`.
 - Block PR merge on red.
 - Cache npm + Prisma engines.
 
-#### 1.25 — Multi-stage Dockerfiles
+#### 1.24 — Multi-stage Dockerfiles
 - `apps/api/Dockerfile`, `apps/web/Dockerfile`: multi-stage, non-root user, `HEALTHCHECK` against `/health/live`.
 - Test locally with `docker compose --profile build up`.
 
-#### 1.26 — OpenAPI spec served at `/docs`
+#### 1.25 — OpenAPI spec served at `/docs`
 - Use `@asteasolutions/zod-to-openapi` to generate from the existing `@repo/shared` schemas.
 - Mount Swagger UI at `/docs` (gate behind `env.isProd ? requireAdmin : noop`).
 
-#### 1.27 — Sentry on API + web
+#### 1.26 — Sentry on API + web
 - `@sentry/node` in `app.ts`; `@sentry/nextjs` in `web`. Tag `release` from git sha.
 
-#### 1.28 — README upgrade
+#### 1.27 — README upgrade
 - Architecture diagram (mermaid).
 - "Run locally in 60s" block.
 - Test card numbers + how to fire webhooks via Stripe CLI.
 - Live demo link + screenshots.
 
-#### 1.29 — Optimistic cart UI
+#### 1.28 — Optimistic cart UI
 - `useOptimistic` in [CartItemControls.tsx](apps/web/components/CartItemControls.tsx) for +/- — instant feedback, settle on response, roll back on error.
 
-#### 1.30 — SEO basics
+#### 1.29 — SEO basics
 - `app/sitemap.ts`, `app/robots.ts`, OG metadata on product detail pages.
 
 ### Tier B — ecomm domain depth
 
-#### 1.31 — Human-readable order numbers
+#### 1.30 — Human-readable order numbers
 - New `Order.orderNumber String @unique` like `ECM-20260509-A1B2C3`. Computed in service layer.
 - Surface in UI; never expose cuid.
 
-#### 1.32 — `Product.sku String @unique` + barcode
+#### 1.31 — `Product.sku String @unique` + barcode
 - Required field on product create form.
 
-#### 1.33 — Soft delete on `Product` + `Category` *(promote earlier if product deletes are next)*
+#### 1.32 — Soft delete on `Product` + `Category` *(promote earlier if product deletes are next)*
 - `deletedAt DateTime?` instead of hard delete; queries filter `deletedAt: null`.
 - Avoids breaking historical orders that link back to products.
-- Current risk: product deletion only blocks in-flight orders. Completed/cancelled historical `OrderItem.productId` rows still require a live `Product`, so hard delete can fail or break order history unless 1.34 lands first.
+- Current risk: product deletion only blocks in-flight orders. Completed/cancelled historical `OrderItem.productId` rows still require a live `Product`, so hard delete can fail or break order history unless 1.33 lands first.
 
-#### 1.34 — `OrderItem` snapshot enrichment
+#### 1.33 — `OrderItem` snapshot enrichment
 - Add `productSlug` and `imageUrl` snapshot fields so order history renders even after product deletion.
 
-#### 1.35 — Inventory adjustment log
+#### 1.34 — Inventory adjustment log
 - New model `InventoryEntry { productId, delta, reason: SOLD|RETURNED|DAMAGED|RECOUNT|MANUAL, orderId?, actorUserId?, createdAt }`.
 - Every `stock` change writes one entry. `Product.stock` becomes a derived/cached column reconciled from the entries.
 
-#### 1.36 — Discount codes (basic)
+#### 1.35 — Discount codes (basic)
 - `Promotion { code @unique, type: PERCENT|FIXED, value, validFrom?, validUntil?, maxUses?, minSubtotalMinor? }`.
 - Apply at checkout: `POST /cart/promotion { code }`. Snapshot on `Order` (`promotionCode`, `discountMinor`).
 
-#### 1.37 — Returns / RMA flow
+#### 1.36 — Returns / RMA flow
 - `Return { id, orderId, status: REQUESTED|APPROVED|RECEIVED|REFUNDED|REJECTED, reason, createdAt }`.
 - Admin approves → triggers refund flow from 1.4.
 
-#### 1.38 — 3DS / SCA handling on web
+#### 1.37 — 3DS / SCA handling on web
 - Detect `payment_intent.requires_action` and call `stripe.confirmCardPayment` / `handleNextAction` from the web side.
 - Show "Verifying with your bank…" UI.
 
-#### 1.39 — Search index
+#### 1.38 — Search index
 - Postgres `tsvector` column on `Product` (name + description), GIN index. `q` filter switches from `contains` to `to_tsquery`.
 
 ---
