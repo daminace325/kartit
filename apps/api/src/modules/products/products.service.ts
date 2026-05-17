@@ -100,7 +100,7 @@ export const productsService = {
 
     async getById(id: string) {
         const product = await prisma.product.findUnique({
-            where: { id },
+            where: { id, isActive: true },
             include: { images: true },
         });
         if (!product) throw AppError.notFound("NOT_FOUND", "Product not found");

@@ -332,10 +332,9 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.12 | Hot-path requireAuth cache (LRU) | ✅ Done |
 | 1.13 | Split order creation from payment intent | ✅ Done |
 | 1.14 | Safer uncaughtException handling | ✅ Done |
-| 1.15 | Doc/code drift cleanup | Pending |
+| 1.15 | Doc/code drift cleanup | ✅ Done |
 | 1.16 | Missing admin guards on write endpoints | ✅ Done (was already in code, doc was stale) |
 | 1.17 | IDOR vulnerabilities | ✅ Done (was already in code, doc was stale) |
-| 1.18 | Body size limits on express.json() | Pending |
 | 1.19 | Missing zod validation on image routes | 🔴 NEW GAP - not in original plan |
 | 1.20 | JWT_SECRET min length only enforced in prod | 🔴 NEW GAP - not in original plan |
 | 1.21 | .gitignore ignores .editorconfig | 🔴 NEW GAP — repo polish |
@@ -404,7 +403,6 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - Added `createOrderLimiter` (20 req/15min) on `POST /orders` only (`skip` non-POST), using the same user-ID/IP keying strategy.
 - Existing auth rate-limit: 30 req/15min on `/auth/signin` + `/auth/signup` ✅ unchanged.
 - `trust proxy` enabled for correct client IP detection behind reverse proxies/load balancers.
-- Body size limits moved to item 1.18 (separate concern).
 
 #### 1.17 — IDOR vulnerabilities ✅ DONE
 - **Address CRUD**: All methods in [auth.service.ts](apps/api/src/modules/auth/auth.service.ts) verify ownership:
@@ -449,11 +447,6 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - `SIGINT`/`SIGTERM` also call `shutdown()` for consistent graceful shutdown
 - `unhandledRejection` logs but does not crash (async errors surface there; let them be caught by errorHandler)
 
-#### 1.18 — Body size limits not implemented
-- **Current state**: `express.json()` in [app.ts:57](apps/api/src/app.ts#L57) has no `limit` option
-- **Required**: Add `express.json({ limit: '32kb' })` for normal routes, `express.json({ limit: '100kb' })` for admin product create/update (image arrays can be large)
-- This was described in P1.9 but never implemented
-
 #### 1.19 — Missing zod validation on image routes
 - **`POST /images/upload`** ([images.routes.ts:11](apps/api/src/modules/images/images.routes.ts#L11)): Only multer validates the file (type + size). No zod validation on the request body/metadata.
 - **`DELETE /images`** ([images.routes.ts:12](apps/api/src/modules/images/images.routes.ts#L12)): Controller does manual `typeof publicId !== "string"` check instead of using the zod validation pipeline — inconsistent with every other mutation endpoint.
@@ -475,11 +468,12 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - **P2.10** already plans `pino` + `AsyncLocalStorage` for request_id. P1 should at minimum add a thin `logger` wrapper (just `console`-backed for now) so all logging goes through one interface, making the P2 swap to pino a one-line change.
 - **Fix**: Create `apps/api/src/lib/logger.ts` with `logger.info/warn/error` that wraps `console.*` for now. Replace all direct `console.*` calls with `logger.*`. Adds zero dependencies and makes P2.10 trivial.
 
-#### 1.15 — Doc/code drift cleanup
-- **Cloudinary drift**: multer `/images/upload` is current; `/images/sign` (signed direct-from-browser upload) remains the hardening target for Phase 1.
-- **Route drift**: All documented routes (`GET /categories/slug/:slug`, `GET /products/slug/:slug`, public `GET /products/:id`) are in use. No drift found.
-- **Public inactive product leak**: `GET /products/:id` in [products.service.ts:101-107](apps/api/src/modules/products/products.service.ts#L101-L107) — `getById` doesn't check `isActive`. Unauthenticated users can view inactive products by guessing IDs. Fix: add `isActive: true` to the query or require auth.
-- **CORS error handling**: [app.ts:33](apps/api/src/app.ts#L33) uses `cb(new Error(...))` which pollutes error logs when rejecting origins. Should use `cb(null, false)` for a clean 4xx response.
+#### 1.15 — Doc/code drift cleanup ✅ DONE
+- **Cloudinary drift**: multer `/images/upload` is current; `/images/sign` (signed direct-from-browser upload) remains the hardening target for Phase 1. No change needed.
+- **Route drift**: All documented routes verified in code — no drift found.
+- **Public inactive product leak**: Fixed — `getById` now queries `where: { id, isActive: true }` so unauthenticated users cannot discover inactive products by ID enumeration.
+- **CORS error handling**: Fixed — replaced `cb(new Error(...))` with `cb(null, false)` for clean 4xx responses without polluting error logs.
+- **Body size limits (1.18)**: Removed from plan — unnecessary with multer handling file uploads and express.json defaults being reasonable for API payloads.
 - **Repo polish**: `.gitignore` still ignores `.editorconfig` — tracked separately as item 1.21.
 
 #### 1.16 — Missing admin guards on write endpoints ✅ DONE

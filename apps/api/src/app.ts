@@ -30,7 +30,7 @@ const corsOriginCheck: cors.CorsOptions["origin"] = (origin, cb) => {
     // Same-origin / curl / server-to-server requests have no Origin header.
     if (!origin) return cb(null, true);
     if (originMatchers.some((match) => match(origin))) return cb(null, true);
-    return cb(new Error(`CORS: origin ${origin} not allowed`));
+    return cb(null, false);
 };
 
 export function createApp() {
