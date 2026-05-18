@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { deleteImageSchema } from "@repo/shared";
+import { validate } from "../../middlewares/validate";
 import { requireAdmin, requireAuth } from "../../middlewares/requireAuth";
 import { uploadImage as uploadImageMw } from "../../middlewares/upload";
 import { deleteImage, uploadImage } from "./images.controller";
@@ -9,4 +11,4 @@ export const imagesRouter: Router = Router();
 imagesRouter.use(requireAuth, requireAdmin);
 
 imagesRouter.post("/upload", uploadImageMw.single("file"), uploadImage);
-imagesRouter.delete("/", deleteImage);
+imagesRouter.delete("/", validate(deleteImageSchema), deleteImage);

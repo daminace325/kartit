@@ -1,6 +1,7 @@
 import type { RequestHandler } from "express";
 import { destroyByPublicIds, uploadBufferToCloudinary } from "../../lib/cloudinary";
 import { AppError } from "../../lib/errors";
+import type { DeleteImageInput } from "@repo/shared";
 
 export const uploadImage: RequestHandler = async (req, res, next) => {
     try {
@@ -17,10 +18,7 @@ export const uploadImage: RequestHandler = async (req, res, next) => {
 
 export const deleteImage: RequestHandler = async (req, res, next) => {
     try {
-        const { publicId } = req.body as { publicId?: unknown };
-        if (typeof publicId !== "string" || publicId.length === 0) {
-            throw AppError.badRequest("VALIDATION_FAILED", "publicId is required");
-        }
+        const { publicId } = req.body as DeleteImageInput;
         await destroyByPublicIds([publicId]);
         res.json({ ok: true });
     } catch (err) {

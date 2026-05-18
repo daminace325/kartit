@@ -335,7 +335,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.15 | Doc/code drift cleanup | ✅ Done |
 | 1.16 | Missing admin guards on write endpoints | ✅ Done (was already in code, doc was stale) |
 | 1.17 | IDOR vulnerabilities | ✅ Done (was already in code, doc was stale) |
-| 1.18 | Missing zod validation on image routes | 🔴 NEW GAP - not in original plan |
+| 1.18 | Missing zod validation on image routes | ✅ Done |
 | 1.19 | JWT_SECRET min length only enforced in prod | 🔴 NEW GAP - not in original plan |
 | 1.20 | .gitignore ignores .editorconfig | 🔴 NEW GAP — repo polish |
 | 1.21 | Console.log/error → structured logging prep | 🔴 NEW GAP — prep for P2.10 |
@@ -462,10 +462,12 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
   - `list` (line 274): `isAdmin ? {} : { userId }` scoped; controller requires admin to explicitly pass `?scope=all` (stronger than originally planned) ✅
 - **Note:** All address and order ownership checks were already in place; the doc was stale.
 
-#### 1.18 — Missing zod validation on image routes
-- **`POST /images/upload`** ([images.routes.ts:11](apps/api/src/modules/images/images.routes.ts#L11)): Only multer validates the file (type + size). No zod validation on the request body/metadata.
-- **`DELETE /images`** ([images.routes.ts:12](apps/api/src/modules/images/images.routes.ts#L12)): Controller does manual `typeof publicId !== "string"` check instead of using the zod validation pipeline — inconsistent with every other mutation endpoint.
-- **Fix**: Add `validate(deleteImageSchema)` to `DELETE /images` route. For `POST /images/upload`, multer handles the file validation; consider adding a body schema if metadata fields are added later.
+#### 1.18 — Missing zod validation on image routes ✅ DONE
+- **Schema**: Created `packages/shared/src/schemas/image.ts` with `deleteImageSchema` (`z.object({ publicId: z.string().min(1) })`)
+- **Barrel**: Added `export * from "./schemas/image"` to `packages/shared/src/index.ts`
+- **Route**: Wired `validate(deleteImageSchema)` on `DELETE /images` route — consistent with all other mutation endpoints
+- **Controller**: Removed manual `typeof publicId !== "string"` check — zod validation handles it via the pipeline
+- **POST /images/upload**: Multer handles file validation; no body schema needed today
 
 #### 1.19 — JWT_SECRET minimum length only enforced in production
 - **Current**: [env.ts:32](apps/api/src/config/env.ts#L32) — `if (isProd && JWT_SECRET.length < 32)` — the check is conditional on `isProd`.
