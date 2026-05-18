@@ -337,8 +337,8 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.17 | IDOR vulnerabilities | ✅ Done (was already in code, doc was stale) |
 | 1.18 | Missing zod validation on image routes | ✅ Done |
 | 1.19 | JWT_SECRET min length only enforced in prod | ✅ Done |
-| 1.20 | .gitignore ignores .editorconfig | 🔴 NEW GAP — repo polish |
-| 1.21 | Console.log/error → structured logging prep | 🔴 NEW GAP — prep for P2.10 |
+| 1.20 | .gitignore ignores .editorconfig | ⏸️ Skipped |
+| 1.21 | Console.log/error → structured logging prep | ✅ Done |
 
 ### Tier S — correctness & money-safety (do these first, in order)
 
@@ -478,11 +478,16 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - **Context**: The HANDOFF says "stop ignoring `.editorconfig` at minimum" if the repo is going to GitHub for resume review. The file enforces 4-space indentation and LF line endings project-wide.
 - **Fix**: Remove `.editorconfig` from `.gitignore`. Also review whether `context/` (line 60) should remain ignored or be committed (handoff docs may be useful to reviewers).
 
-#### 1.21 — Console.log/error usage → structured logging prep
-- **20 instances** across `apps/api/src/` — [server.ts](apps/api/src/server.ts) (4×), [errorHandler.ts](apps/api/src/middlewares/errorHandler.ts) (1×), [idempotency.ts](apps/api/src/middlewares/idempotency.ts) (3×), [cloudinary.ts](apps/api/src/lib/cloudinary.ts) (1×), [payments.controller.ts](apps/api/src/modules/payments/payments.controller.ts) (3×), [orders.service.ts](apps/api/src/modules/orders/orders.service.ts) (2×), [sweepAbandonedOrders.ts](apps/api/src/jobs/sweepAbandonedOrders.ts) (5×).
-- **Issue**: No correlation IDs, no structured metadata, no timestamp formatting — makes production debugging harder. The `console.warn` calls in the payments controller for unknown PaymentIntents are especially concerning.
-- **P2.10** already plans `pino` + `AsyncLocalStorage` for request_id. P1 should at minimum add a thin `logger` wrapper (just `console`-backed for now) so all logging goes through one interface, making the P2 swap to pino a one-line change.
-- **Fix**: Create `apps/api/src/lib/logger.ts` with `logger.info/warn/error` that wraps `console.*` for now. Replace all direct `console.*` calls with `logger.*`. Adds zero dependencies and makes P2.10 trivial.
+#### 1.21 — Console.log/error usage → structured logging prep ✅ DONE
+- **Created** `apps/api/src/lib/logger.ts` — thin `logger.info/warn/error` wrapper over `console.*`. Zero dependencies; P2.10 pino swap is a one-line change per method.
+- **Replaced 19** direct `console.*` calls across 6 files:
+  - [server.ts](apps/api/src/server.ts) (4×: startup, shutdown, unhandledRejection, uncaughtException)
+  - [errorHandler.ts](apps/api/src/middlewares/errorHandler.ts) (1×: unhandled error)
+  - [idempotency.ts](apps/api/src/middlewares/idempotency.ts) (3×: cleanup, cache update, claim release)
+  - [cloudinary.ts](apps/api/src/lib/cloudinary.ts) (1×: destroy failure)
+  - [payments.controller.ts](apps/api/src/modules/payments/payments.controller.ts) (3×: unknown PaymentIntent warnings)
+  - [sweepAbandonedOrders.ts](apps/api/src/jobs/sweepAbandonedOrders.ts) (5×: stripe cancel, sweep log, sweep error, summary, fatal)
+- **Note:** `orders.service.ts` had no console calls (doc count was stale).
 
 ### Tier A — visible polish & differentiators
 

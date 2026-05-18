@@ -1,6 +1,7 @@
 import { prisma } from "@repo/db";
 import { OrderStatus, PaymentStatus } from "@repo/shared";
 import { getStripe } from "../lib/stripe";
+import { logger } from "../lib/logger";
 
 const ABANDONED_THRESHOLD_MINUTES = 30;
 
@@ -56,7 +57,7 @@ export async function sweepAbandonedOrders(): Promise<number> {
                     await stripe.paymentIntents
                         .cancel(payment.providerPaymentId)
                         .catch((e: unknown) => {
-                            console.error(
+                            logger.error(
                                 `stripe cancel failed for ${payment.providerPaymentId}`,
                                 e,
                             );
@@ -90,9 +91,9 @@ export async function sweepAbandonedOrders(): Promise<number> {
             });
 
             processedCount++;
-            console.log(`Swept abandoned order: ${order.id}`);
+            logger.info(`Swept abandoned order: ${order.id}`);
         } catch (err) {
-            console.error(`Failed to sweep order ${order.id}:`, err);
+            logger.error(`Failed to sweep order ${order.id}:`, err);
         }
     }
 
@@ -103,11 +104,11 @@ export async function sweepAbandonedOrders(): Promise<number> {
 if (require.main === module) {
     sweepAbandonedOrders()
         .then((count) => {
-            console.log(`Swept ${count} abandoned orders`);
+            logger.info(`Swept ${count} abandoned orders`);
             process.exit(0);
         })
         .catch((err) => {
-            console.error("Sweeper failed:", err);
+            logger.error("Sweeper failed:", err);
             process.exit(1);
         });
 }

@@ -1,6 +1,7 @@
 import type { ErrorRequestHandler, RequestHandler } from "express";
 import multer from "multer";
 import { AppError } from "../lib/errors";
+import { logger } from "../lib/logger";
 
 export const notFoundHandler: RequestHandler = (req, res) => {
     res.status(404).json({
@@ -34,7 +35,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
         return;
     }
 
-    console.error("[unhandled error]", err);
+    logger.error("[unhandled error]", err);
     res.status(500).json({
         error: { code: "INTERNAL", message: "Internal server error" },
     });

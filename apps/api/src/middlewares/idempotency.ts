@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import type { RequestHandler } from "express";
 import { Prisma, prisma } from "@repo/db";
 import { AppError } from "../lib/errors";
+import { logger } from "../lib/logger";
 
 // 24h cache window per HANDOFF 1.1.
 const TTL_MS = 24 * 60 * 60 * 1000;
@@ -83,7 +84,7 @@ function cleanupRecoverableClaims(now: Date): void {
             },
         })
         .catch((e: unknown) => {
-            console.error("idempotency cleanup failed", e);
+            logger.error("idempotency cleanup failed", e);
         });
 }
 
@@ -217,7 +218,7 @@ export const idempotency: RequestHandler = async (req, res, next) => {
                     originalJson(body);
                 })
                 .catch((e: unknown) => {
-                    console.error("idempotency cache update failed", e);
+                    logger.error("idempotency cache update failed", e);
                     if (!res.headersSent) {
                         res.status(500).json({
                             error: {
@@ -234,7 +235,7 @@ export const idempotency: RequestHandler = async (req, res, next) => {
         void prisma.idempotencyKey
             .delete({ where: { userId_key: { userId, key } } })
             .catch((e: unknown) => {
-                console.error("idempotency claim release failed", e);
+                logger.error("idempotency claim release failed", e);
             });
 
         return originalJson(body);

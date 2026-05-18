@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from "cloudinary";
 import { env } from "../config/env";
+import { logger } from "./logger";
 
 cloudinary.config({
     cloud_name: env.CLOUDINARY_CLOUD_NAME,
@@ -40,7 +41,7 @@ export async function destroyByPublicIds(publicIds: string[]): Promise<void> {
         ids.map((id) =>
             cloudinary.uploader
                 .destroy(id)
-                .catch((err) => console.error(`Cloudinary destroy failed for ${id}:`, err)),
+                .catch((err) => logger.error(`Cloudinary destroy failed for ${id}:`, err)),
         ),
     );
 }

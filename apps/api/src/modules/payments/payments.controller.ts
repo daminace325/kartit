@@ -5,6 +5,7 @@ import type { PaymentIntentInput } from "@repo/shared";
 import { env } from "../../config/env";
 import { AppError } from "../../lib/errors";
 import { getStripe } from "../../lib/stripe";
+import { logger } from "../../lib/logger";
 import { ordersService } from "../orders/orders.service";
 import { paymentsService } from "./payments.service";
 
@@ -81,7 +82,7 @@ export const stripeWebhook: RequestHandler = async (req, res, next) => {
                 const intent = event.data.object as Stripe.PaymentIntent;
                 const order = await ordersService.markPaidByPaymentIntent(intent.id);
                 if (!order) {
-                    console.warn(
+                    logger.warn(
                         `[stripe] payment_intent.succeeded for unknown intent ${intent.id}`,
                     );
                 }
@@ -98,7 +99,7 @@ export const stripeWebhook: RequestHandler = async (req, res, next) => {
                     reason,
                 );
                 if (!order) {
-                    console.warn(
+                    logger.warn(
                         `[stripe] payment_intent.payment_failed for unknown intent ${intent.id}`,
                     );
                 }
@@ -112,7 +113,7 @@ export const stripeWebhook: RequestHandler = async (req, res, next) => {
                     paymentIntentId,
                 );
                 if (!order) {
-                    console.warn(
+                    logger.warn(
                         `[stripe] charge.refunded for unknown payment intent ${paymentIntentId}`,
                     );
                 }
