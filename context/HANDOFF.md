@@ -192,7 +192,7 @@ ecomm/
 ## Env files (real values, not committed)
 
 - `ecomm/.env` — `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL` (compose + Prisma CLI)
-- `ecomm/apps/api/.env` — `PORT=5000`, `DATABASE_URL`, `JWT_SECRET` (≥32 chars in prod), `JWT_EXPIRES_IN=7d`, `COOKIE_NAME=ecomm_auth`, `COOKIE_SECURE`, `COOKIE_SAMESITE` (`lax`/`strict`/`none`; `none` requires Secure), `WEB_ORIGINS` (comma-separated; supports single-`*` host wildcards like `https://*.vercel.app`), `CLOUDINARY_CLOUD_NAME`/`API_KEY`/`API_SECRET`/`FOLDER`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CURRENCY=USD`
+- `ecomm/apps/api/.env` — `PORT=5000`, `DATABASE_URL`, `JWT_SECRET` (≥32 chars), `JWT_EXPIRES_IN=7d`, `COOKIE_NAME=ecomm_auth`, `COOKIE_SECURE`, `COOKIE_SAMESITE` (`lax`/`strict`/`none`; `none` requires Secure), `WEB_ORIGINS` (comma-separated; supports single-`*` host wildcards like `https://*.vercel.app`), `CLOUDINARY_CLOUD_NAME`/`API_KEY`/`API_SECRET`/`FOLDER`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CURRENCY=USD`
 - `ecomm/apps/web/.env.local` — `NEXT_PUBLIC_API_URL=http://localhost:5000`
 - `ecomm/packages/db/.env` — `DATABASE_URL` (separate, for Prisma CLI)
 
@@ -336,7 +336,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.16 | Missing admin guards on write endpoints | ✅ Done (was already in code, doc was stale) |
 | 1.17 | IDOR vulnerabilities | ✅ Done (was already in code, doc was stale) |
 | 1.18 | Missing zod validation on image routes | ✅ Done |
-| 1.19 | JWT_SECRET min length only enforced in prod | 🔴 NEW GAP - not in original plan |
+| 1.19 | JWT_SECRET min length only enforced in prod | ✅ Done |
 | 1.20 | .gitignore ignores .editorconfig | 🔴 NEW GAP — repo polish |
 | 1.21 | Console.log/error → structured logging prep | 🔴 NEW GAP — prep for P2.10 |
 
@@ -469,10 +469,9 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - **Controller**: Removed manual `typeof publicId !== "string"` check — zod validation handles it via the pipeline
 - **POST /images/upload**: Multer handles file validation; no body schema needed today
 
-#### 1.19 — JWT_SECRET minimum length only enforced in production
-- **Current**: [env.ts:32](apps/api/src/config/env.ts#L32) — `if (isProd && JWT_SECRET.length < 32)` — the check is conditional on `isProd`.
-- **Risk**: In development/staging, `JWT_SECRET` can be 1 character. Since JWT uses HS256 (symmetric), a weak secret trivially allows token forgery.
-- **Fix**: Make the 32-char minimum check unconditional (remove `isProd` guard). A short secret is a security bug in any environment.
+#### 1.19 — JWT_SECRET minimum length only enforced in production ✅ DONE
+- **Fix**: Removed the `isProd` guard — `JWT_SECRET` must be ≥32 chars in all environments. Also dropped "in production" from the error message.
+- **Risk addressed**: A short JWT secret in development/staging trivially allows HS256 token forgery, which is a security bug regardless of environment.
 
 #### 1.20 — `.gitignore` ignores `.editorconfig`
 - **Current**: [.gitignore:37](.gitignore#L37) — `.editorconfig` is listed under "Editor / OS" ignores.

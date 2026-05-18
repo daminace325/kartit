@@ -29,8 +29,8 @@ const parseSameSite = (raw: string | undefined): SameSite => {
 };
 
 const JWT_SECRET = required("JWT_SECRET");
-if (isProd && JWT_SECRET.length < 32) {
-    throw new Error("JWT_SECRET must be at least 32 characters in production");
+if (JWT_SECRET.length < 32) {
+    throw new Error("JWT_SECRET must be at least 32 characters");
 }
 
 const COOKIE_SAMESITE = parseSameSite(process.env.COOKIE_SAMESITE);
