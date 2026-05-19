@@ -7,13 +7,11 @@ import { useEffect, useState } from "react";
 type CartItem = { quantity: number };
 
 export default function CartBadge({ isAuthenticated }: { isAuthenticated: boolean }) {
-    const [count, setCount] = useState(0);
+    const [rawCount, setRawCount] = useState(0);
+    const count = isAuthenticated ? rawCount : 0;
 
     useEffect(() => {
-        if (!isAuthenticated) {
-            setCount(0);
-            return;
-        }
+        if (!isAuthenticated) return;
         let cancelled = false;
         fetch("/api/cart", { credentials: "include" })
             .then((r) => (r.ok ? r.json() : { cart: { items: [] as CartItem[] } }))
@@ -21,9 +19,9 @@ export default function CartBadge({ isAuthenticated }: { isAuthenticated: boolea
                 if (cancelled) return;
                 const items: CartItem[] = data?.cart?.items ?? [];
                 const total = items.reduce((sum, i) => sum + (i?.quantity ?? 0), 0);
-                setCount(total);
+                setRawCount(total);
             })
-            .catch(() => !cancelled && setCount(0));
+            .catch(() => !cancelled && setRawCount(0));
         return () => {
             cancelled = true;
         };
