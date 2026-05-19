@@ -40,7 +40,7 @@ const STOCK_RELEASE: ReadonlySet<OrderStatus> = new Set([
 
 // Allowed admin-driven status transitions. Customer-initiated cancel uses
 // the dedicated cancel route and is restricted to PENDING in Phase 1.
-const ALLOWED_TRANSITIONS: Record<OrderStatus, ReadonlySet<OrderStatus>> = {
+export const ALLOWED_TRANSITIONS: Record<OrderStatus, ReadonlySet<OrderStatus>> = {
     [OrderStatus.PENDING]: new Set([
         OrderStatus.PAID,
         OrderStatus.CANCELLED,
