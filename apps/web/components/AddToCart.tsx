@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ShoppingCart, Check } from "lucide-react";
 import { csrfFetch } from "@/lib/csrf";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 export default function AddToCart({
     productId,
@@ -93,11 +94,7 @@ export default function AddToCart({
                 )}
             </div>
 
-            {error && (
-                <p className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                    {error}
-                </p>
-            )}
+            <ErrorBanner message={error} />
 
             <button
                 type="button"

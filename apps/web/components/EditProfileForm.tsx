@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatApiError } from "@/lib/errors";
 import { csrfFetch } from "@/lib/csrf";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 export default function EditProfileForm({
     initialName,
@@ -49,11 +50,7 @@ export default function EditProfileForm({
 
     return (
         <form onSubmit={handleSubmit} className="max-w-lg space-y-5">
-            {error && (
-                <div className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                    {error}
-                </div>
-            )}
+            <ErrorBanner message={error} />
             {saved && (
                 <div className="rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
                     Profile updated

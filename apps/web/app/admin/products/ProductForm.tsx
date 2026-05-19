@@ -7,6 +7,7 @@ import type { ProductDTO, ProductImageDTO } from "@repo/shared";
 import { slugify } from "@/lib/strings";
 import { formatApiError } from "@/lib/errors";
 import { csrfFetch } from "@/lib/csrf";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 type CategoryOption = { id: string; name: string };
 
@@ -207,11 +208,7 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
 
     return (
         <form onSubmit={handleSubmit} className="max-w-3xl space-y-5">
-            {error && (
-                <div className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                    {error}
-                </div>
-            )}
+            <ErrorBanner message={error} />
 
             <div>
                 <label className="mb-1 block text-sm font-medium text-slate-200">Name</label>

@@ -14,6 +14,7 @@ import {
 import { formatMoney, type AddressDTO } from "@repo/shared";
 import { formatApiError } from "@/lib/errors";
 import { csrfFetch } from "@/lib/csrf";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 type Row = {
     productId: string;
@@ -267,11 +268,7 @@ export default function CheckoutClient(props: Props) {
                                     Click below to create your order and load the secure
                                     Stripe payment form.
                                 </p>
-                                {orderError && (
-                                    <div className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-                                        {orderError}
-                                    </div>
-                                )}
+                                {orderError && <ErrorBanner message={orderError} className="mt-3 rounded-md text-red-200" />}
                                 <button
                                     type="button"
                                     onClick={startPayment}
@@ -417,11 +414,7 @@ function PayForm({
     return (
         <form onSubmit={onSubmit} className="space-y-4">
             <PaymentElement />
-            {error && (
-                <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-                    {error}
-                </div>
-            )}
+            <ErrorBanner message={error} className="rounded-md text-red-200" />
             <button
                 type="submit"
                 disabled={!stripe || !elements || submitting}

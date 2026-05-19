@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, X } from "lucide-react";
 import { formatApiError } from "@/lib/errors";
 import { csrfFetch } from "@/lib/csrf";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 export default function CancelOrderButton({ orderId }: { orderId: string }) {
     const router = useRouter();
@@ -77,11 +78,7 @@ export default function CancelOrderButton({ orderId }: { orderId: string }) {
                     )}
                 </button>
             </div>
-            {error && (
-                <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-                    {error}
-                </div>
-            )}
+            <ErrorBanner message={error} className="rounded-md text-xs text-red-200" />
         </div>
     );
 }

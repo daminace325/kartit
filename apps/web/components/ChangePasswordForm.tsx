@@ -5,6 +5,7 @@ import { useState } from "react";
 import { formatApiError } from "@/lib/errors";
 import { PASSWORD_MIN_LENGTH, PASSWORD_RULES_TEXT } from "@/lib/auth_constants";
 import { csrfFetch } from "@/lib/csrf";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 export default function ChangePasswordForm() {
     const router = useRouter();
@@ -60,11 +61,7 @@ export default function ChangePasswordForm() {
 
     return (
         <form onSubmit={handleSubmit} className="max-w-lg space-y-5">
-            {error && (
-                <div className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                    {error}
-                </div>
-            )}
+            <ErrorBanner message={error} />
             {saved && (
                 <div className="rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
                     Password changed successfully

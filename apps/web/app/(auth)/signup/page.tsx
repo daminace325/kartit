@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { csrfFetch } from "@/lib/csrf";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 export default function SignupPage() {
     return (
@@ -61,11 +62,7 @@ function SignupForm() {
                 Create your KartIt account
             </h1>
 
-            {error && (
-                <div className="mb-4 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                    {error}
-                </div>
-            )}
+            <ErrorBanner message={error} className="mb-4" />
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>

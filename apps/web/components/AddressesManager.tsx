@@ -6,6 +6,7 @@ import { Plus, Pencil, Trash2, X } from "lucide-react";
 import type { AddressDTO, AddressInput } from "@repo/shared";
 import { formatApiError } from "@/lib/errors";
 import { csrfFetch } from "@/lib/csrf";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 type Mode =
     | { kind: "list" }
@@ -204,11 +205,7 @@ function AddressForm({
                 </button>
             </div>
 
-            {error && (
-                <div className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                    {error}
-                </div>
-            )}
+            <ErrorBanner message={error} />
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Recipient name" required value={name} onChange={setName} />
