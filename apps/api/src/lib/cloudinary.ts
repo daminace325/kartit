@@ -46,4 +46,3 @@ export async function destroyByPublicIds(publicIds: string[]): Promise<void> {
     );
 }
 
-export default cloudinary;

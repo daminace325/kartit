@@ -2,7 +2,7 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 import { env } from "../config/env";
 import type { UserRole } from "@repo/shared";
 
-export type JwtPayload = {
+type JwtPayload = {
     sub: string; // user id
     role: UserRole;
     tv: number; // tokenVersion

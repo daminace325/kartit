@@ -9,7 +9,7 @@ const ABANDONED_THRESHOLD_MINUTES = 30;
  * Sweeps PENDING orders that have been abandoned (no payment received within
  * the threshold). Cancels the Stripe PaymentIntent and restores inventory.
  */
-export async function sweepAbandonedOrders(): Promise<number> {
+async function sweepAbandonedOrders(): Promise<number> {
     const threshold = new Date(
         Date.now() - ABANDONED_THRESHOLD_MINUTES * 60 * 1000,
     );

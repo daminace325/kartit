@@ -3,13 +3,13 @@
 //
 // All amounts are integer minor units (1999 = $19.99). See ./money.ts.
 
-export type PricingInput = {
+type PricingInput = {
     /** Subtotal in minor units. */
     subtotal: bigint;
     currency: string;
 };
 
-export type PricingBreakdown = {
+type PricingBreakdown = {
     /** All amounts are minor-unit BigInts. */
     subtotal: bigint;
     shipping: bigint;

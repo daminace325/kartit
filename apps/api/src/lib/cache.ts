@@ -25,7 +25,7 @@ class TtlCache<T> {
     }
 }
 
-export interface CachedUser {
+interface CachedUser {
     id: string;
     role: string;
     tokenVersion: number;

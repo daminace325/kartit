@@ -30,7 +30,6 @@ export const productImageInputSchema = z.object({
     publicId: z.string().min(1).max(200),
     alt: z.string().max(200).optional(),
 });
-export type ProductImageInput = z.infer<typeof productImageInputSchema>;
 
 export const productCreateSchema = z.object({
     slug,

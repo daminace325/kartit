@@ -34,5 +34,3 @@ export type ApiError = {
     message: string;
     details?: unknown;
 };
-
-export type ApiErrorResponse = { error: ApiError };
