@@ -4,18 +4,9 @@ import { api, ApiClientError } from "@/lib/api";
 import { formatMoney, type OrderDTO } from "@repo/shared";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "@/lib/order_status";
 import OrderStatusControls from "@/components/OrderStatusControls";
+import { formatDateTime } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
-
-function formatDateTime(iso: string) {
-    return new Date(iso).toLocaleString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-    });
-}
 
 export default async function AdminOrderDetailPage({
     params,

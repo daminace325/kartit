@@ -11,18 +11,9 @@ import {
     ORDER_TIMELINE,
 } from "@/lib/order_status";
 import CancelOrderButton from "@/components/CancelOrderButton";
+import { formatDateTime } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
-
-function formatDateTime(iso: string) {
-    return new Date(iso).toLocaleString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-    });
-}
 
 export default async function OrderDetailPage({
     params,

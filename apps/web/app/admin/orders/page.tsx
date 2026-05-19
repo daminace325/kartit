@@ -2,16 +2,9 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { formatMoney, type OrderListResponse } from "@repo/shared";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "@/lib/order_status";
+import { formatDate } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
-
-function formatDate(iso: string) {
-    return new Date(iso).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-}
 
 export default async function AdminOrdersPage({
     searchParams,
