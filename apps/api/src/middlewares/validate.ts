@@ -1,5 +1,5 @@
 import type { RequestHandler } from "express";
-import { z, type ZodType } from "zod";
+import { type ZodType } from "zod";
 import { AppError } from "../lib/errors";
 
 type Source = "body" | "query" | "params";
@@ -10,7 +10,7 @@ export const validate =
         const result = schema.safeParse(req[source]);
         if (!result.success) {
             return next(
-                AppError.badRequest("VALIDATION_FAILED", "Invalid request", z.flattenError(result.error)),
+                AppError.badRequest("VALIDATION_FAILED", "Invalid request", result.error.flatten()),
             );
         }
         // In Express 5 `req.query` is a getter-only property, so we can't reassign.
