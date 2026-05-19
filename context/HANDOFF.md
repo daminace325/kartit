@@ -235,6 +235,11 @@ cd ecomm; npm run db:seed
 # Typecheck whole repo
 cd ecomm; npm run typecheck
 
+# Tests (Docker required for integration tests)
+cd ecomm; npm run test           # all tests
+cd ecomm; npm run test:api       # same as above
+cd ecomm; npm run test:watch     # watch mode
+
 # Build (packages → api → web)
 cd ecomm; npm run build
 
@@ -339,6 +344,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.19 | JWT_SECRET min length only enforced in prod | ✅ Done |
 | 1.20 | .gitignore ignores .editorconfig | ⏸️ Skipped |
 | 1.21 | Console.log/error → structured logging prep | ✅ Done |
+| 1.22 | Test suite (unit + integration, 62 tests) | ✅ Done |
 
 ### Tier S — correctness & money-safety (do these first, in order)
 
@@ -491,19 +497,24 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 
 ### Tier A — visible polish & differentiators
 
-#### 1.22 — Test suite (this is the single biggest credibility lift)
-- Before wiring CI, fix the current web lint failures:
-  - `CartBadge.tsx`: `react-hooks/set-state-in-effect` from `setCount(0)` inside the effect.
-  - `CheckoutClient.tsx`: unused `Link` import.
-- `vitest` + `supertest` + **Testcontainers** (Postgres) for integration tests in `apps/api/test/`.
-- Required coverage:
-  - Auth: signup/signin/me/change-password (with tokenVersion bump).
-  - Cart: add/update/remove + concurrent add race.
-  - Orders: create from cart, idempotency replay, cancel restores stock.
-  - Stripe webhook: succeeded / failed / refunded / event dedup via `WebhookEvent`.
-  - Status transition matrix (parameterized table test).
-- Pure unit tests for `pricing.ts`, `money.ts`, status-transition table.
-- Playwright e2e in `apps/web/e2e/`: signup → add to cart → checkout with Stripe test card → see paid order.
+#### 1.22 — Test suite ✅ DONE
+- **Lint fix:** Fixed `CartBadge.tsx` `react-hooks/set-state-in-effect` by deriving `count` from `rawCount` + `isAuthenticated` (no setState in effect body). `CheckoutClient.tsx` unused `Link` import was already resolved.
+- **Test infrastructure:** `vitest` + `supertest` + **Testcontainers** (Postgres 16 Alpine) in `apps/api/test/`.
+  - `vitest.config.ts` at `apps/api/` with `@repo/shared` and `@repo/db` path aliases, `fileParallelism: false` (shared test DB).
+  - `globalSetup.ts` starts a per-run Postgres container, runs `prisma migrate deploy`.
+  - `setup.ts` reads the container URL and sets `DATABASE_URL` before test modules load.
+  - `helpers.ts` provides `makeApp()`, `request(app)`, `cleanDb()`, `createTestUser()`, `createAdminUser()`, `createTestProduct()`, `createTestCategory()`.
+- **Unit tests** (`test/unit/`):
+  - [money.test.ts](apps/api/test/unit/money.test.ts) — 10 tests: `decimalsFor`, `formatMoney`, `parseMoney`.
+  - [pricing.test.ts](apps/api/test/unit/pricing.test.ts) — 7 tests: shipping thresholds, tax calculation, edge cases.
+  - [status-transitions.test.ts](apps/api/test/unit/status-transitions.test.ts) — 17 tests: parameterized matrix of all allowed transitions, terminal statuses, refundability.
+- **Integration tests** (`test/integration/`):
+  - [auth.test.ts](apps/api/test/integration/auth.test.ts) — 11 tests: signup (201/409/400), signin (200/401), me (200/401), change-password (200 with tokenVersion invalidation/401), sign-out-all (204 + old token rejected).
+  - [cart.test.ts](apps/api/test/integration/cart.test.ts) — 10 tests: get empty, add (201), increment, stock clamp (409), auth required (401), update quantity, remove via qty=0, delete item, clear cart.
+  - [orders.test.ts](apps/api/test/integration/orders.test.ts) — 7 tests: create order (201 + stock deduction + cart clear), empty cart (400), idempotency replay (201 cached), list own orders, IDOR (other user sees empty), cancel (200 + stock restore), cancel non-PENDING (409).
+- **Not yet covered (deferred):** Stripe webhook integration tests (require Stripe test mode mocking), Playwright e2e, concurrent cart race test.
+- **Exported** `ALLOWED_TRANSITIONS` from [orders.service.ts](apps/api/src/modules/orders/orders.service.ts) for testability.
+- **Scripts:** `npm run test -w apps/api` (all), `npm run test:watch -w apps/api`, `npm run test:unit -w apps/api` (unit only), `npm run test:integration -w apps/api` (integration only). Root also has `npm run test` and `npm run test:api`.
 
 #### 1.23 — GitHub Actions CI
 - `.github/workflows/ci.yml`: matrix `lint` → `typecheck` → `test:api` (with PG service container) → `test:web` → `build`.
