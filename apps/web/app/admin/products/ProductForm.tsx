@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Upload, X, Loader2 } from "lucide-react";
-import type { ProductDTO, ProductImageDTO } from "@repo/shared";
+import { minorToMajor, majorToMinor, type ProductDTO, type ProductImageDTO } from "@repo/shared";
 import { slugify } from "@/lib/slugify";
 import { formatApiError } from "@/lib/formatApiError";
 import { csrfFetch } from "@/lib/csrf";
@@ -34,25 +34,6 @@ type Props = {
     >;
     categoryOptions: CategoryOption[];
 };
-
-function minorToMajor(minor: string | number, decimals: number): string {
-    const m = BigInt(minor);
-    if (decimals === 0) return m.toString();
-    const factor = 10n ** BigInt(decimals);
-    const whole = m / factor;
-    const frac = (m % factor).toString().padStart(decimals, "0");
-    return `${whole}.${frac}`;
-}
-
-function majorToMinor(major: string, decimals: number): string {
-    const trimmed = major.trim();
-    if (!/^\d+(\.\d+)?$/.test(trimmed)) throw new Error("Invalid price");
-    const [whole, frac = ""] = trimmed.split(".");
-    const fracPadded = (frac + "0".repeat(decimals)).slice(0, decimals);
-    return decimals === 0
-        ? whole
-        : (BigInt(whole) * 10n ** BigInt(decimals) + BigInt(fracPadded || "0")).toString();
-}
 
 export default function ProductForm({ mode, initial, categoryOptions }: Props) {
     const router = useRouter();
