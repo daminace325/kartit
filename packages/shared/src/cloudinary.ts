@@ -22,7 +22,7 @@ const PRESETS: Record<CloudinaryPreset, string> = {
  *   cloudinaryUrl("ecomm/products/abc123", "card")
  *   -> "https://res.cloudinary.com/<cloud>/image/upload/w_400,h_400,c_fill,q_auto,f_auto/ecomm/products/abc123"
  */
-export function cloudinaryUrl(publicId: string, preset: CloudinaryPreset): string {
+function getCloudName(): string {
     const cloud =
         (typeof process !== "undefined" &&
             (process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ??
@@ -34,7 +34,14 @@ export function cloudinaryUrl(publicId: string, preset: CloudinaryPreset): strin
             "cloudinaryUrl: missing NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME / CLOUDINARY_CLOUD_NAME env",
         );
     }
+    return cloud;
+}
 
+export function cloudinaryBaseUrl(publicId: string): string {
+    return `https://res.cloudinary.com/${getCloudName()}/image/upload/${publicId}`;
+}
+
+export function cloudinaryUrl(publicId: string, preset: CloudinaryPreset): string {
     const transform = PRESETS[preset];
-    return `https://res.cloudinary.com/${cloud}/image/upload/${transform}/${publicId}`;
+    return `https://res.cloudinary.com/${getCloudName()}/image/upload/${transform}/${publicId}`;
 }

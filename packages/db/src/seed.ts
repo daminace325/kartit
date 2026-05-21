@@ -27,6 +27,7 @@ import * as dotenv from "dotenv";
 // matter the cwd. Order: monorepo root .env → apps/api/.env → local cwd.
 // `override: false` (the default) means earlier files win on conflicts.
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+import { cloudinaryBaseUrl } from "@repo/shared";
 dotenv.config({ path: path.resolve(__dirname, "../../../apps/api/.env") });
 dotenv.config();
 
@@ -104,18 +105,6 @@ const p = (
   stock,
   images,
 });
-
-// ─── Cloudinary URL builder (mirrors packages/shared/src/cloudinary.ts) ──
-// Stored URL uses no transforms — the web app applies presets at render time.
-function cloudinaryUrl(publicId: string): string {
-  const cloud = process.env.CLOUDINARY_CLOUD_NAME;
-  if (!cloud) {
-    throw new Error(
-      "Seed: CLOUDINARY_CLOUD_NAME is required when products declare images.",
-    );
-  }
-  return `https://res.cloudinary.com/${cloud}/image/upload/${publicId}`;
-}
 
 const CATEGORIES: CategorySeed[] = [
   {
@@ -725,7 +714,7 @@ async function seedCatalog() {
         for (let i = 0; i < prod.images.length; i++) {
           const img = prod.images[i]!;
           if (!img.publicId.trim()) continue;
-          const url = cloudinaryUrl(img.publicId);
+          const url = cloudinaryBaseUrl(img.publicId);
           await prisma.productImage.upsert({
             where: {
               productId_position: { productId: product.id, position: i },
