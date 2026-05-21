@@ -9,7 +9,7 @@ import {
     ORDER_STATUS_LABELS,
     ORDER_STATUS_STYLES,
     ORDER_TIMELINE,
-} from "@/lib/order_status";
+} from "@/lib/order-status";
 import CancelOrderButton from "@/components/CancelOrderButton";
 import { formatDateTime } from "@/lib/dates";
 

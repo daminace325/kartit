@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import type { OrderStatus } from "@repo/shared";
 import { formatApiError } from "@/lib/errors";
-import { ORDER_STATUS_LABELS } from "@/lib/order_status";
+import { ORDER_STATUS_LABELS } from "@/lib/order-status";
 import { csrfFetch } from "@/lib/csrf";
 
 // Mirrors the server-side ALLOWED_TRANSITIONS in orders.service.

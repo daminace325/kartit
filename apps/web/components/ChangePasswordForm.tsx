@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatApiError } from "@/lib/errors";
-import { PASSWORD_MIN_LENGTH, PASSWORD_RULES_TEXT } from "@/lib/auth_constants";
+import { PASSWORD_MIN_LENGTH, PASSWORD_RULES_TEXT } from "@/lib/auth-constants";
 import { csrfFetch } from "@/lib/csrf";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
