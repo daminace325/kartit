@@ -13,7 +13,7 @@ export default function CancelOrderButton({ orderId }: { orderId: string }) {
 
     async function cancel() {
         const result = await execute(
-            `/api/orders/${orderId}/cancel`,
+            `/orders/${orderId}/cancel`,
             { method: "POST" },
             "Failed to cancel order",
         );

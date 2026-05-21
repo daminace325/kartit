@@ -32,7 +32,7 @@ export default function ChangePasswordForm() {
         }
 
         const result = await execute(
-            "/api/auth/change-password",
+            "/auth/change-password",
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

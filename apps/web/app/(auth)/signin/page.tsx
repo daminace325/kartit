@@ -26,7 +26,7 @@ function SigninForm() {
     async function handleSubmit(e: React.SyntheticEvent) {
         e.preventDefault();
         const result = await execute(
-            "/api/auth/signin",
+            "/auth/signin",
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

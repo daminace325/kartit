@@ -40,8 +40,8 @@ export default function CategoryForm({ mode, initial, parentOptions }: Props) {
 
         const url =
             mode === "create"
-                ? "/api/categories"
-                : `/api/categories/${initial!.id}`;
+                ? "/categories"
+                : `/categories/${initial!.id}`;
         const method = mode === "create" ? "POST" : "PUT";
 
         const result = await execute(

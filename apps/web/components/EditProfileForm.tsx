@@ -21,7 +21,7 @@ export default function EditProfileForm({
         e.preventDefault();
         setSaved(false);
         const result = await execute(
-            "/api/auth/me",
+            "/auth/me",
             {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },

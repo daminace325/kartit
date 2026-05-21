@@ -36,8 +36,8 @@ export default function OrderStatusControls({ orderId, currentStatus }: Props) {
         setActiveStatus(status);
         const isRefund = status === "REFUNDED";
         const url = isRefund
-            ? `/api/orders/${orderId}/refund`
-            : `/api/orders/${orderId}/status`;
+            ? `/orders/${orderId}/refund`
+            : `/orders/${orderId}/status`;
         const method = isRefund ? "POST" : "PATCH";
         const body = isRefund
             ? undefined

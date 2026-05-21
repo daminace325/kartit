@@ -17,7 +17,7 @@ export default function DeleteCategoryButton({
     async function handleClick() {
         if (!confirm(`Delete category "${name}"? This cannot be undone.`)) return;
         const result = await execute(
-            `/api/categories/${id}`,
+            `/categories/${id}`,
             { method: "DELETE" },
             "Failed to delete",
         );

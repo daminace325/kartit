@@ -97,7 +97,7 @@ function PayForm({
             setError(null);
             try {
                 const orderData = await api.get<{ order: OrderDTO }>(
-                    `/api/orders/${encodeURIComponent(orderId)}`,
+                    `/orders/${encodeURIComponent(orderId)}`,
                 );
                 const o = orderData.order;
                 if (o.status !== "PENDING") {
@@ -108,7 +108,7 @@ function PayForm({
                 setOrder(o);
 
                 const intentData = await api.post<{ clientSecret: string }>(
-                    "/api/payments/intent",
+                    "/payments/intent",
                     { orderId },
                     {
                         headers: { "Idempotency-Key": newIdempotencyKey() },

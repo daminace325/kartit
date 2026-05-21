@@ -17,7 +17,7 @@ export default function DeleteProductButton({
     async function handleClick() {
         if (!confirm(`Delete product "${name}"? This cannot be undone.`)) return;
         const result = await execute(
-            `/api/products/${id}`,
+            `/products/${id}`,
             { method: "DELETE" },
             "Failed to delete",
         );

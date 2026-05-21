@@ -88,7 +88,7 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
                 const formData = new FormData();
                 formData.append("file", file);
                 const data = await api.post<{ url: string; publicId: string }>(
-                    "/api/images/upload",
+                    "/images/upload",
                     formData,
                 );
                 setImages((prev) => [
@@ -116,7 +116,7 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
         setImages((prev) => prev.filter((_, i) => i !== idx));
         // Best-effort cleanup of the orphaned Cloudinary asset (ignore errors).
         if (img?.publicId) {
-            api.delete("/api/images", {
+            api.delete("/images", {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ publicId: img.publicId }),
             }).catch(() => undefined);
@@ -144,7 +144,7 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
         }
 
         const url =
-            mode === "create" ? "/api/products" : `/api/products/${initial!.id}`;
+            mode === "create" ? "/products" : `/products/${initial!.id}`;
         const method = mode === "create" ? "POST" : "PUT";
 
         const result = await execute(

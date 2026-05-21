@@ -11,7 +11,7 @@ export default function SignOutButton({ className }: { className?: string }) {
     async function handleClick() {
         setLoading(true);
         try {
-            await api.post("/api/auth/signout");
+            await api.post("/auth/signout");
             router.push("/");
             router.refresh();
         } finally {
