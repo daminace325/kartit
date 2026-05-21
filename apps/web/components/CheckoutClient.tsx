@@ -1,20 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { loadStripe, type Stripe } from "@stripe/stripe-js";
-import {
-    Elements,
-    PaymentElement,
-    useElements,
-    useStripe,
-} from "@stripe/react-stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
 import { formatMoney, type AddressDTO } from "@repo/shared";
-import { formatApiError } from "@/lib/formatApiError";
-import { csrfFetch } from "@/lib/csrf";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { PayForm } from "@/components/payment/PayForm";
+import { useIdempotencyKey } from "@/hooks/useIdempotencyKey";
+import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 
 type Row = {
     productId: string;
@@ -38,28 +32,6 @@ interface Props {
     taxNote?: string;
 }
 
-let stripePromise: Promise<Stripe | null> | null = null;
-function getStripe(publishableKey: string): Promise<Stripe | null> {
-    if (!stripePromise) stripePromise = loadStripe(publishableKey);
-    return stripePromise;
-}
-
-function newIdempotencyKey(): string {
-    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-        return `order-${crypto.randomUUID()}`;
-    }
-    return `order-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-function getCheckoutAttemptKey(storageKey: string): string {
-    const existing = window.sessionStorage.getItem(storageKey);
-    if (existing) return existing;
-
-    const key = newIdempotencyKey();
-    window.sessionStorage.setItem(storageKey, key);
-    return key;
-}
-
 export default function CheckoutClient(props: Props) {
     const {
         publishableKey,
@@ -74,86 +46,19 @@ export default function CheckoutClient(props: Props) {
         taxNote,
     } = props;
 
-    const [creating, setCreating] = useState(false);
-    const [orderError, setOrderError] = useState<string | null>(null);
     const [selectedAddressId, setSelectedAddressId] = useState(
         addresses[0]?.id ?? "",
     );
-    const [order, setOrder] = useState<{
-        id: string;
-        clientSecret: string;
-    } | null>(null);
 
-    const stripe = useMemo(() => getStripe(publishableKey), [publishableKey]);
-    const checkoutAttemptStorageKey = useMemo(() => {
-        const cartFingerprint = rows
-            .map((row) => `${row.productId}:${row.quantity}`)
-            .sort()
-            .join("|");
-        return `ecomm:checkout:idempotency:${currency}:${totalMinor}:${selectedAddressId}:${cartFingerprint}`;
-    }, [currency, rows, selectedAddressId, totalMinor]);
+    const { getBaseKey, clearKey } = useIdempotencyKey({
+        currency,
+        totalMinor,
+        selectedAddressId,
+        rows,
+    });
 
-    async function startPayment() {
-        if (!selectedAddressId) {
-            setOrderError("Select a shipping address before continuing.");
-            return;
-        }
-        setCreating(true);
-        setOrderError(null);
-        const baseKey = getCheckoutAttemptKey(checkoutAttemptStorageKey);
-        try {
-            // Step 1 — create the order (stock is reserved, cart is cleared).
-            const orderRes = await csrfFetch("/api/orders", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Idempotency-Key": `${baseKey}:order`,
-                },
-                body: JSON.stringify({ shippingAddressId: selectedAddressId }),
-            });
-            const orderData = await orderRes.json().catch(() => ({}));
-            if (!orderRes.ok) {
-                setOrderError(
-                    formatApiError(orderData?.error, "Failed to create order"),
-                );
-                return;
-            }
-            const orderId = orderData?.order?.id;
-            if (!orderId) {
-                setOrderError("Order created but no ID returned.");
-                return;
-            }
-
-            // Step 2 — create the Stripe PaymentIntent for this order.
-            const intentRes = await csrfFetch("/api/payments/intent", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Idempotency-Key": `${baseKey}:intent`,
-                },
-                body: JSON.stringify({ orderId }),
-            });
-            const intentData = await intentRes.json().catch(() => ({}));
-            if (!intentRes.ok) {
-                setOrderError(
-                    formatApiError(
-                        intentData?.error,
-                        "Failed to initialize payment",
-                    ),
-                );
-                return;
-            }
-            if (!intentData?.clientSecret) {
-                setOrderError("Payment provider did not return a client secret.");
-                return;
-            }
-            setOrder({ id: orderId, clientSecret: intentData.clientSecret });
-        } catch {
-            setOrderError("Network error. Please try again.");
-        } finally {
-            setCreating(false);
-        }
-    }
+    const { stripe, creating, orderError, order, startPayment } =
+        useStripeCheckout(publishableKey);
 
     return (
         <div className="mt-8 grid gap-8 lg:grid-cols-[2fr_1fr]">
@@ -227,7 +132,6 @@ export default function CheckoutClient(props: Props) {
                                                 checked={selected}
                                                 onChange={() => {
                                                     setSelectedAddressId(addr.id);
-                                                    setOrderError(null);
                                                 }}
                                                 className="sr-only"
                                             />
@@ -271,7 +175,7 @@ export default function CheckoutClient(props: Props) {
                                 {orderError && <ErrorBanner message={orderError} className="mt-3 rounded-md text-red-200" />}
                                 <button
                                     type="button"
-                                    onClick={startPayment}
+                                    onClick={() => startPayment(getBaseKey(), selectedAddressId)}
                                     disabled={creating || !selectedAddressId}
                                     className="mt-4 inline-flex items-center justify-center gap-2 rounded-md bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-400 disabled:opacity-60"
                                 >
@@ -297,7 +201,7 @@ export default function CheckoutClient(props: Props) {
                                     orderId={order.id}
                                     totalMinor={totalMinor}
                                     currency={currency}
-                                    checkoutAttemptStorageKey={checkoutAttemptStorageKey}
+                                    clearIdempotencyKey={clearKey}
                                 />
                             </Elements>
                         )}
@@ -350,88 +254,5 @@ export default function CheckoutClient(props: Props) {
                 </div>
             </aside>
         </div>
-    );
-}
-
-function PayForm({
-    orderId,
-    totalMinor,
-    currency,
-    checkoutAttemptStorageKey,
-}: {
-    orderId: string;
-    totalMinor: string;
-    currency: string;
-    checkoutAttemptStorageKey: string;
-}) {
-    const stripe = useStripe();
-    const elements = useElements();
-    const router = useRouter();
-    const [submitting, setSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (!stripe) return;
-        const url = new URL(window.location.href);
-        const intentSecret =
-            url.searchParams.get("payment_intent_client_secret") ?? null;
-        if (!intentSecret) return;
-        stripe
-            .retrievePaymentIntent(intentSecret)
-            .then(({ paymentIntent }) => {
-                if (paymentIntent?.status === "succeeded") {
-                    router.replace(`/orders/${orderId}`);
-                }
-            })
-            .catch(() => undefined);
-    }, [stripe, orderId, router]);
-
-    async function onSubmit(e: React.FormEvent) {
-        e.preventDefault();
-        if (!stripe || !elements) return;
-        setSubmitting(true);
-        setError(null);
-
-        // Once the user submits payment we no longer need the idempotency
-        // key for this checkout attempt. Clearing it here means a subsequent
-        // checkout visit always generates a fresh key, avoiding stale
-        // idempotency replays that would return a terminal PaymentIntent.
-        window.sessionStorage.removeItem(checkoutAttemptStorageKey);
-
-        const { error: stripeError } = await stripe.confirmPayment({
-            elements,
-            confirmParams: {
-                return_url: `${window.location.origin}/orders/${orderId}`,
-            },
-        });
-
-        if (stripeError) {
-            setError(stripeError.message ?? "Payment failed");
-            setSubmitting(false);
-        }
-    }
-
-    return (
-        <form onSubmit={onSubmit} className="space-y-4">
-            <PaymentElement />
-            <ErrorBanner message={error} className="rounded-md text-red-200" />
-            <button
-                type="submit"
-                disabled={!stripe || !elements || submitting}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-                {submitting ? (
-                    <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Processing...
-                    </>
-                ) : (
-                    `Pay ${formatMoney(BigInt(totalMinor), currency)}`
-                )}
-            </button>
-            <p className="text-center text-xs text-slate-500">
-                Test card: 4242 4242 4242 4242 · any future date · any CVC
-            </p>
-        </form>
     );
 }
