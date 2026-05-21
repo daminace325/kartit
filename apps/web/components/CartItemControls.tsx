@@ -19,7 +19,7 @@ export default function CartItemControls({ productId, qty, stock }: Props) {
     async function updateQty(newQty: number) {
         if (newQty === qty) return;
         const result = await execute(
-            `/api/cart/items/${encodeURIComponent(productId)}`,
+            `/cart/items/${encodeURIComponent(productId)}`,
             {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -34,7 +34,7 @@ export default function CartItemControls({ productId, qty, stock }: Props) {
     async function remove() {
         if (!confirm("Remove this item from your cart?")) return;
         const result = await execute(
-            `/api/cart/items/${encodeURIComponent(productId)}`,
+            `/cart/items/${encodeURIComponent(productId)}`,
             { method: "DELETE" },
             "Failed to remove",
         );

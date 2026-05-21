@@ -9,7 +9,7 @@ export default function ClearCartButton() {
 
     async function handleClick() {
         if (!confirm("Clear all items from your cart?")) return;
-        const result = await execute("/api/cart", { method: "DELETE" }, "Failed to clear cart");
+        const result = await execute("/cart", { method: "DELETE" }, "Failed to clear cart");
         if (!result.ok) {
             alert(result.error);
             return;

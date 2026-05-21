@@ -24,7 +24,7 @@ export default function AddToCart({
         setAdded(false);
 
         const result = await execute(
-            "/api/cart/items",
+            "/cart/items",
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
