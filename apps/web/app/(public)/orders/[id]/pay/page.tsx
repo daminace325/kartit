@@ -13,7 +13,7 @@ import {
 } from "@stripe/react-stripe-js";
 import { formatMoney, type OrderDTO } from "@repo/shared";
 import { csrfFetch } from "@/lib/csrf";
-import { formatApiError } from "@/lib/errors";
+import { formatApiError } from "@/lib/formatApiError";
 
 let stripePromise: Promise<Stripe | null> | null = null;
 function getStripe(key: string): Promise<Stripe | null> {

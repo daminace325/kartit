@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Check, Circle } from "lucide-react";
-import { api, ApiClientError } from "@/lib/api";
+import { api, ApiClientError } from "@/lib/apiClient";
 import { getCurrentUser } from "@/lib/auth";
 import { formatMoney, type OrderDTO } from "@repo/shared";
 import {

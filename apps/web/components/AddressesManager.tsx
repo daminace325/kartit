@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Plus, Pencil, Trash2, X } from "lucide-react";
 import type { AddressDTO, AddressInput } from "@repo/shared";
-import { formatApiError } from "@/lib/errors";
+import { formatApiError } from "@/lib/formatApiError";
 import { csrfFetch } from "@/lib/csrf";
 import { ErrorBanner } from "@/components/ErrorBanner";
 

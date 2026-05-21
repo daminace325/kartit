@@ -12,7 +12,7 @@ import {
     useStripe,
 } from "@stripe/react-stripe-js";
 import { formatMoney, type AddressDTO } from "@repo/shared";
-import { formatApiError } from "@/lib/errors";
+import { formatApiError } from "@/lib/formatApiError";
 import { csrfFetch } from "@/lib/csrf";
 import { ErrorBanner } from "@/components/ErrorBanner";
 

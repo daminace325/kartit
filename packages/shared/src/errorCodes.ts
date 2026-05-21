@@ -28,9 +28,3 @@ export const ErrorCode = {
     IDEMPOTENCY_IN_PROGRESS: "IDEMPOTENCY_IN_PROGRESS",
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
-
-export type ApiError = {
-    code: ErrorCode | string;
-    message: string;
-    details?: unknown;
-};

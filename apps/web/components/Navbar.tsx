@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Search, User } from "lucide-react";
-import { api } from "@/lib/api";
+import { api } from "@/lib/apiClient";
 import { getCurrentUser } from "@/lib/auth";
 import CartBadge from "./CartBadge";
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { api, ApiClientError } from "@/lib/api";
+import { api, ApiClientError } from "@/lib/apiClient";
 import { formatMoney, type OrderDTO } from "@repo/shared";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "@/lib/order-status";
 import OrderStatusControls from "@/components/OrderStatusControls";

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { api, ApiClientError } from "@/lib/api";
+import { api, ApiClientError } from "@/lib/apiClient";
 import type { ProductDTO } from "@repo/shared";
 import ProductCard from "@/components/ProductCard";
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ShoppingCart, AlertTriangle } from "lucide-react";
-import { api } from "@/lib/api";
+import { api } from "@/lib/apiClient";
 import { getCurrentUser } from "@/lib/auth";
 import { formatMoney, type CartDTO } from "@repo/shared";
 import CartItemControls from "@/components/CartItemControls";

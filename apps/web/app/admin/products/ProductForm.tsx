@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Upload, X, Loader2 } from "lucide-react";
 import type { ProductDTO, ProductImageDTO } from "@repo/shared";
-import { slugify } from "@/lib/strings";
-import { formatApiError } from "@/lib/errors";
+import { slugify } from "@/lib/slugify";
+import { formatApiError } from "@/lib/formatApiError";
 import { csrfFetch } from "@/lib/csrf";
 import { ErrorBanner } from "@/components/ErrorBanner";
 

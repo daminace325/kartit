@@ -4,7 +4,7 @@
  */
 
 import { cache } from "react";
-import { ApiClientError, apiFetch } from "./api";
+import { ApiClientError, apiFetch } from "./apiClient";
 import type { UserRole } from "@repo/shared";
 
 export type SessionUser = {

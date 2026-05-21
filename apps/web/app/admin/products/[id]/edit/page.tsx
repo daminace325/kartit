@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { api, ApiClientError } from "@/lib/api";
+import { api, ApiClientError } from "@/lib/apiClient";
 import type { ProductDTO } from "@repo/shared";
 import ProductForm from "../../ProductForm";
 

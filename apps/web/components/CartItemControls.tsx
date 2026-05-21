@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Trash2, Loader2 } from "lucide-react";
-import { formatApiError } from "@/lib/errors";
+import { formatApiError } from "@/lib/formatApiError";
 import { csrfFetch } from "@/lib/csrf";
 
 type Props = {

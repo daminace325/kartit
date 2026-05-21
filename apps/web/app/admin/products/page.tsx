@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus, Pencil } from "lucide-react";
-import { api } from "@/lib/api";
+import { api } from "@/lib/apiClient";
 import { formatMoney, type ProductDTO } from "@repo/shared";
 import { productImageUrl } from "@/lib/image";
 import DeleteProductButton from "./DeleteProductButton";

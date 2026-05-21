@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import type { OrderStatus } from "@repo/shared";
-import { formatApiError } from "@/lib/errors";
+import { formatApiError } from "@/lib/formatApiError";
 import { ORDER_STATUS_LABELS } from "@/lib/order-status";
 import { csrfFetch } from "@/lib/csrf";
 

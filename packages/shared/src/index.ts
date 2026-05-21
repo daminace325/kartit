@@ -1,7 +1,8 @@
 // Public API of the shared package.
 export * from "./money";
 export * from "./enums";
-export * from "./errors";
+export * from "./errorCodes";
+export * from "./apiError";
 export * from "./cloudinary";
 export * from "./pricing";
 export * from "./schemas/auth";
