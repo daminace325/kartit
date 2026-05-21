@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { csrfFetch } from "@/lib/csrf";
+import { useApiMutation } from "@/hooks/useApiMutation";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
 export default function SignupPage() {
@@ -22,16 +22,13 @@ function SignupForm() {
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [error, setError] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
+    const { execute, loading, error, clearError } = useApiMutation();
 
     async function handleSubmit(e: React.SyntheticEvent) {
         e.preventDefault();
-        setError(null);
-        setLoading(true);
-
-        try {
-            const res = await csrfFetch("/api/auth/signup", {
+        const result = await execute(
+            "/api/auth/signup",
+            {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -39,21 +36,13 @@ function SignupForm() {
                     email,
                     password,
                 }),
-            });
+            },
+            "Sign up failed",
+        );
+        if (!result.ok) return;
 
-            const data = await res.json().catch(() => null);
-            if (!res.ok) {
-                setError(data?.error?.message ?? "Sign up failed");
-                return;
-            }
-
-            router.push(next);
-            router.refresh();
-        } catch {
-            setError("Network error. Please try again.");
-        } finally {
-            setLoading(false);
-        }
+        router.push(next);
+        router.refresh();
     }
 
     return (

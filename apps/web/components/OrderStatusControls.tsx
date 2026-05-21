@@ -4,9 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { getNextStatuses, type OrderStatus } from "@repo/shared";
-import { formatApiError } from "@/lib/formatApiError";
+import { useApiMutation } from "@/hooks/useApiMutation";
 import { ORDER_STATUS_LABELS } from "@/lib/order-status";
-import { csrfFetch } from "@/lib/csrf";
 
 // REFUND is handled via POST /orders/:id/refund (calls Stripe), not status patch.
 
@@ -28,45 +27,31 @@ interface Props {
 
 export default function OrderStatusControls({ orderId, currentStatus }: Props) {
     const router = useRouter();
-    const [updating, setUpdating] = useState<OrderStatus | null>(null);
-    const [error, setError] = useState<string | null>(null);
+    const [activeStatus, setActiveStatus] = useState<OrderStatus | null>(null);
+    const { execute, loading, error, clearError } = useApiMutation();
 
     const next = getNextStatuses(currentStatus);
 
     async function update(status: OrderStatus) {
-        setUpdating(status);
-        setError(null);
-        try {
-            // REFUND goes through a different endpoint that calls Stripe
-            const isRefund = status === "REFUNDED";
-            const url = isRefund
-                ? `/api/orders/${orderId}/refund`
-                : `/api/orders/${orderId}/status`;
-            const method = isRefund ? "POST" : "PATCH";
-            const body = isRefund
-                ? undefined
-                : JSON.stringify({ status });
+        setActiveStatus(status);
+        const isRefund = status === "REFUNDED";
+        const url = isRefund
+            ? `/api/orders/${orderId}/refund`
+            : `/api/orders/${orderId}/status`;
+        const method = isRefund ? "POST" : "PATCH";
+        const body = isRefund
+            ? undefined
+            : JSON.stringify({ status });
 
-            const res = await csrfFetch(url, {
-                method,
-                headers: body ? { "Content-Type": "application/json" } : undefined,
-                body,
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                const msg = isRefund
-                    ? "Failed to initiate refund"
-                    : "Failed to update status";
-                setError(formatApiError(data?.error, msg));
-                setUpdating(null);
-                return;
-            }
-            setUpdating(null);
-            router.refresh();
-        } catch {
-            setError("Network error. Please try again.");
-            setUpdating(null);
-        }
+        const result = await execute(url, {
+            method,
+            headers: body ? { "Content-Type": "application/json" } : undefined,
+            body,
+        }, isRefund ? "Failed to initiate refund" : "Failed to update status");
+
+        setActiveStatus(null);
+        if (!result.ok) return;
+        router.refresh();
     }
 
     return (
@@ -83,8 +68,8 @@ export default function OrderStatusControls({ orderId, currentStatus }: Props) {
             ) : (
                 <div className="mt-4 space-y-2">
                     {next.map((status) => {
-                        const isLoading = updating === status;
-                        const disabled = updating !== null;
+                        const isActive = activeStatus === status;
+                        const disabled = loading;
                         return (
                             <button
                                 key={status}
@@ -93,7 +78,7 @@ export default function OrderStatusControls({ orderId, currentStatus }: Props) {
                                 disabled={disabled}
                                 className={`inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${TRANSITION_STYLES[status]}`}
                             >
-                                {isLoading ? (
+                                {isActive ? (
                                     <>
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                         Updating...

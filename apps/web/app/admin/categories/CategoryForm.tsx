@@ -3,8 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { slugify } from "@/lib/slugify";
-import { formatApiError } from "@/lib/formatApiError";
-import { csrfFetch } from "@/lib/csrf";
+import { useApiMutation } from "@/hooks/useApiMutation";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
 type Initial = { id: string; name: string; slug: string; parentId: string | null };
@@ -23,8 +22,7 @@ export default function CategoryForm({ mode, initial, parentOptions }: Props) {
     const [slug, setSlug] = useState(initial?.slug ?? "");
     const [parentId, setParentId] = useState<string>(initial?.parentId ?? "");
     const [slugTouched, setSlugTouched] = useState(Boolean(initial?.slug));
-    const [error, setError] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
+    const { execute, loading, error, clearError } = useApiMutation();
 
     function onNameChange(value: string) {
         setName(value);
@@ -33,42 +31,32 @@ export default function CategoryForm({ mode, initial, parentOptions }: Props) {
 
     async function handleSubmit(e: React.SyntheticEvent) {
         e.preventDefault();
-        setError(null);
-        setLoading(true);
 
         const payload: Record<string, unknown> = {
             name: name.trim(),
             slug: slug.trim(),
-            // Always send parentId — null clears it on edit, omit-equivalent on create.
             parentId: parentId ? parentId : null,
         };
 
-        try {
-            const url =
-                mode === "create"
-                    ? "/api/categories"
-                    : `/api/categories/${initial!.id}`;
-            const method = mode === "create" ? "POST" : "PUT";
+        const url =
+            mode === "create"
+                ? "/api/categories"
+                : `/api/categories/${initial!.id}`;
+        const method = mode === "create" ? "POST" : "PUT";
 
-            const res = await csrfFetch(url, {
+        const result = await execute(
+            url,
+            {
                 method,
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
-            });
+            },
+            "Failed to save category",
+        );
+        if (!result.ok) return;
 
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                setError(formatApiError(data?.error, "Failed to save category"));
-                return;
-            }
-
-            router.push("/admin/categories");
-            router.refresh();
-        } catch {
-            setError("Network error. Please try again.");
-        } finally {
-            setLoading(false);
-        }
+        router.push("/admin/categories");
+        router.refresh();
     }
 
     return (

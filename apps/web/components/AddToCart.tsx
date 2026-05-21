@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ShoppingCart, Check } from "lucide-react";
-import { csrfFetch } from "@/lib/csrf";
+import { useApiMutation } from "@/hooks/useApiMutation";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
 export default function AddToCart({
@@ -15,43 +15,33 @@ export default function AddToCart({
 }) {
     const router = useRouter();
     const [qty, setQty] = useState(1);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const { execute, loading, error, clearError } = useApiMutation();
     const [added, setAdded] = useState(false);
 
     const outOfStock = stock <= 0;
 
     async function handleAdd() {
-        setLoading(true);
-        setError(null);
         setAdded(false);
 
-        try {
-            const res = await csrfFetch("/api/cart/items", {
+        const result = await execute(
+            "/api/cart/items",
+            {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ productId, quantity: qty }),
-            });
+            },
+            "Failed to add to cart",
+        );
 
-            if (res.status === 401) {
-                router.push(`/signin?next=${encodeURIComponent(window.location.pathname)}`);
-                return;
-            }
-
-            const data = await res.json().catch(() => null);
-            if (!res.ok) {
-                setError(data?.error?.message ?? "Failed to add to cart");
-                return;
-            }
-
-            setAdded(true);
-            router.refresh();
-            setTimeout(() => setAdded(false), 2000);
-        } catch {
-            setError("Network error. Please try again.");
-        } finally {
-            setLoading(false);
+        if (result.response.status === 401) {
+            router.push(`/signin?next=${encodeURIComponent(window.location.pathname)}`);
+            return;
         }
+        if (!result.ok) return;
+
+        setAdded(true);
+        router.refresh();
+        setTimeout(() => setAdded(false), 2000);
     }
 
     if (outOfStock) {

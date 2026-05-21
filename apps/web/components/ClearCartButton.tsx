@@ -1,28 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { formatApiError } from "@/lib/formatApiError";
-import { csrfFetch } from "@/lib/csrf";
+import { useApiMutation } from "@/hooks/useApiMutation";
 
 export default function ClearCartButton() {
     const router = useRouter();
-    const [loading, setLoading] = useState(false);
+    const { execute, loading } = useApiMutation();
 
     async function handleClick() {
         if (!confirm("Clear all items from your cart?")) return;
-        setLoading(true);
-        try {
-            const res = await csrfFetch("/api/cart", { method: "DELETE" });
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                alert(formatApiError(data?.error, "Failed to clear cart"));
-                return;
-            }
-            router.refresh();
-        } finally {
-            setLoading(false);
+        const result = await execute("/api/cart", { method: "DELETE" }, "Failed to clear cart");
+        if (!result.ok) {
+            alert(result.error);
+            return;
         }
+        router.refresh();
     }
 
     return (

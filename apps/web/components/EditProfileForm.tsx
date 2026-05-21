@@ -2,8 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { formatApiError } from "@/lib/formatApiError";
-import { csrfFetch } from "@/lib/csrf";
+import { useApiMutation } from "@/hooks/useApiMutation";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
 export default function EditProfileForm({
@@ -15,35 +14,25 @@ export default function EditProfileForm({
 }) {
     const router = useRouter();
     const [name, setName] = useState(initialName);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const { execute, loading, error, clearError } = useApiMutation();
     const [saved, setSaved] = useState(false);
 
     async function handleSubmit(e: React.SyntheticEvent) {
         e.preventDefault();
-        setError(null);
         setSaved(false);
-        setLoading(true);
-
-        try {
-            const res = await csrfFetch("/api/auth/me", {
+        const result = await execute(
+            "/api/auth/me",
+            {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name: name.trim() }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                setError(formatApiError(data?.error, "Failed to save"));
-                return;
-            }
-            setSaved(true);
-            router.refresh();
-            setTimeout(() => setSaved(false), 2000);
-        } catch {
-            setError("Network error. Please try again.");
-        } finally {
-            setLoading(false);
-        }
+            },
+            "Failed to save",
+        );
+        if (!result.ok) return;
+        setSaved(true);
+        router.refresh();
+        setTimeout(() => setSaved(false), 2000);
     }
 
     const dirty = name.trim() !== initialName.trim();

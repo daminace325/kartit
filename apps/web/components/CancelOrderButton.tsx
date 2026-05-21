@@ -3,36 +3,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, X } from "lucide-react";
-import { formatApiError } from "@/lib/formatApiError";
-import { csrfFetch } from "@/lib/csrf";
+import { useApiMutation } from "@/hooks/useApiMutation";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
 export default function CancelOrderButton({ orderId }: { orderId: string }) {
     const router = useRouter();
     const [confirming, setConfirming] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const { execute, loading, error, clearError } = useApiMutation();
 
     async function cancel() {
-        setLoading(true);
-        setError(null);
-        try {
-            const res = await csrfFetch(`/api/orders/${orderId}/cancel`, {
-                method: "POST",
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                setError(formatApiError(data?.error, "Failed to cancel order"));
-                setLoading(false);
-                return;
-            }
-            setConfirming(false);
-            setLoading(false);
-            router.refresh();
-        } catch {
-            setError("Network error. Please try again.");
-            setLoading(false);
-        }
+        const result = await execute(
+            `/api/orders/${orderId}/cancel`,
+            { method: "POST" },
+            "Failed to cancel order",
+        );
+        if (!result.ok) return;
+        setConfirming(false);
+        router.refresh();
     }
 
     if (!confirming) {
@@ -55,7 +42,7 @@ export default function CancelOrderButton({ orderId }: { orderId: string }) {
                     type="button"
                     onClick={() => {
                         setConfirming(false);
-                        setError(null);
+                        clearError();
                     }}
                     disabled={loading}
                     className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-slate-500 disabled:opacity-50"

@@ -7,6 +7,7 @@ import { minorToMajor, majorToMinor, type ProductDTO, type ProductImageDTO } fro
 import { slugify } from "@/lib/slugify";
 import { formatApiError } from "@/lib/formatApiError";
 import { csrfFetch } from "@/lib/csrf";
+import { useApiMutation } from "@/hooks/useApiMutation";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
 type CategoryOption = { id: string; name: string };
@@ -65,8 +66,7 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
     );
 
     const [uploading, setUploading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
+    const { execute, loading, error, setError, clearError } = useApiMutation();
 
     function onNameChange(value: string) {
         setName(value);
@@ -124,7 +124,6 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
 
     async function handleSubmit(e: React.SyntheticEvent) {
         e.preventDefault();
-        setError(null);
 
         let priceMinor: string;
         try {
@@ -143,48 +142,37 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
             return;
         }
 
-        setLoading(true);
+        const url =
+            mode === "create" ? "/api/products" : `/api/products/${initial!.id}`;
+        const method = mode === "create" ? "POST" : "PUT";
 
-        const payload = {
-            name: name.trim(),
-            slug: slug.trim(),
-            description: description.trim(),
-            priceMinor: Number(priceMinor),
-            currency: currency.trim().toUpperCase(),
-            stock: stockNum,
-            isActive,
-            categoryId,
-            images: images.map((i) => ({
-                url: i.url,
-                publicId: i.publicId,
-                ...(i.alt ? { alt: i.alt } : {}),
-            })),
-        };
-
-        try {
-            const url =
-                mode === "create" ? "/api/products" : `/api/products/${initial!.id}`;
-            const method = mode === "create" ? "POST" : "PUT";
-
-            const res = await csrfFetch(url, {
+        const result = await execute(
+            url,
+            {
                 method,
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
-            const data = await res.json().catch(() => ({}));
+                body: JSON.stringify({
+                    name: name.trim(),
+                    slug: slug.trim(),
+                    description: description.trim(),
+                    priceMinor: Number(priceMinor),
+                    currency: currency.trim().toUpperCase(),
+                    stock: stockNum,
+                    isActive,
+                    categoryId,
+                    images: images.map((i) => ({
+                        url: i.url,
+                        publicId: i.publicId,
+                        ...(i.alt ? { alt: i.alt } : {}),
+                    })),
+                }),
+            },
+            "Failed to save product",
+        );
+        if (!result.ok) return;
 
-            if (!res.ok) {
-                setError(formatApiError(data?.error, "Failed to save product"));
-                return;
-            }
-
-            router.push("/admin/products");
-            router.refresh();
-        } catch {
-            setError("Network error. Please try again.");
-        } finally {
-            setLoading(false);
-        }
+        router.push("/admin/products");
+        router.refresh();
     }
 
     return (

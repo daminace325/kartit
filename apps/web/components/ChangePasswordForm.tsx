@@ -2,9 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { formatApiError } from "@/lib/formatApiError";
+import { useApiMutation } from "@/hooks/useApiMutation";
 import { PASSWORD_MIN_LENGTH, PASSWORD_RULES_TEXT } from "@/lib/auth-constants";
-import { csrfFetch } from "@/lib/csrf";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
 export default function ChangePasswordForm() {
@@ -12,13 +11,11 @@ export default function ChangePasswordForm() {
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const { execute, loading, error, setError, clearError } = useApiMutation();
     const [saved, setSaved] = useState(false);
 
     async function handleSubmit(e: React.SyntheticEvent) {
         e.preventDefault();
-        setError(null);
         setSaved(false);
 
         if (newPassword.length < PASSWORD_MIN_LENGTH) {
@@ -34,29 +31,23 @@ export default function ChangePasswordForm() {
             return;
         }
 
-        setLoading(true);
-        try {
-            const res = await csrfFetch("/api/auth/change-password", {
+        const result = await execute(
+            "/api/auth/change-password",
+            {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ currentPassword, newPassword }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                setError(formatApiError(data?.error, "Failed to change password"));
-                return;
-            }
-            setSaved(true);
-            setCurrentPassword("");
-            setNewPassword("");
-            setConfirmPassword("");
-            router.refresh();
-            setTimeout(() => setSaved(false), 2500);
-        } catch {
-            setError("Network error. Please try again.");
-        } finally {
-            setLoading(false);
-        }
+            },
+            "Failed to change password",
+        );
+        if (!result.ok) return;
+
+        setSaved(true);
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        router.refresh();
+        setTimeout(() => setSaved(false), 2500);
     }
 
     return (

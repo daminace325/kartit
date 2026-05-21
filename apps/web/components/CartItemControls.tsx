@@ -1,10 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { Trash2, Loader2 } from "lucide-react";
-import { formatApiError } from "@/lib/formatApiError";
-import { csrfFetch } from "@/lib/csrf";
+import { useApiMutation } from "@/hooks/useApiMutation";
 
 type Props = {
     productId: string;
@@ -15,58 +14,35 @@ type Props = {
 export default function CartItemControls({ productId, qty, stock }: Props) {
     const router = useRouter();
     const [pending, startTransition] = useTransition();
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const { execute, loading, error, clearError } = useApiMutation();
 
     async function updateQty(newQty: number) {
         if (newQty === qty) return;
-        setBusy(true);
-        setError(null);
-        try {
-            const res = await csrfFetch(
-                `/api/cart/items/${encodeURIComponent(productId)}`,
-                {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ quantity: newQty }),
-                },
-            );
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                setError(formatApiError(data?.error, "Failed to update"));
-                return;
-            }
-            startTransition(() => router.refresh());
-        } catch {
-            setError("Network error");
-        } finally {
-            setBusy(false);
-        }
+        const result = await execute(
+            `/api/cart/items/${encodeURIComponent(productId)}`,
+            {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ quantity: newQty }),
+            },
+            "Failed to update",
+        );
+        if (!result.ok) return;
+        startTransition(() => router.refresh());
     }
 
     async function remove() {
         if (!confirm("Remove this item from your cart?")) return;
-        setBusy(true);
-        setError(null);
-        try {
-            const res = await csrfFetch(
-                `/api/cart/items/${encodeURIComponent(productId)}`,
-                { method: "DELETE" },
-            );
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                setError(formatApiError(data?.error, "Failed to remove"));
-                return;
-            }
-            startTransition(() => router.refresh());
-        } catch {
-            setError("Network error");
-        } finally {
-            setBusy(false);
-        }
+        const result = await execute(
+            `/api/cart/items/${encodeURIComponent(productId)}`,
+            { method: "DELETE" },
+            "Failed to remove",
+        );
+        if (!result.ok) return;
+        startTransition(() => router.refresh());
     }
 
-    const disabled = busy || pending;
+    const disabled = loading || pending;
 
     return (
         <div className="flex flex-col items-end gap-2">

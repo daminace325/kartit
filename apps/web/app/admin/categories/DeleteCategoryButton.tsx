@@ -1,10 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { Trash2 } from "lucide-react";
-import { formatApiError } from "@/lib/formatApiError";
-import { csrfFetch } from "@/lib/csrf";
+import { useApiMutation } from "@/hooks/useApiMutation";
 
 export default function DeleteCategoryButton({
     id,
@@ -14,22 +12,20 @@ export default function DeleteCategoryButton({
     name: string;
 }) {
     const router = useRouter();
-    const [loading, setLoading] = useState(false);
+    const { execute, loading } = useApiMutation();
 
     async function handleClick() {
         if (!confirm(`Delete category "${name}"? This cannot be undone.`)) return;
-        setLoading(true);
-        try {
-            const res = await csrfFetch(`/api/categories/${id}`, { method: "DELETE" });
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                alert(formatApiError(data?.error, "Failed to delete"));
-                return;
-            }
-            router.refresh();
-        } finally {
-            setLoading(false);
+        const result = await execute(
+            `/api/categories/${id}`,
+            { method: "DELETE" },
+            "Failed to delete",
+        );
+        if (!result.ok) {
+            alert(result.error);
+            return;
         }
+        router.refresh();
     }
 
     return (

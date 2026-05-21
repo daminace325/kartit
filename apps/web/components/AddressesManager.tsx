@@ -4,8 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Plus, Pencil, Trash2, X } from "lucide-react";
 import type { AddressDTO, AddressInput } from "@repo/shared";
-import { formatApiError } from "@/lib/formatApiError";
-import { csrfFetch } from "@/lib/csrf";
+import { useApiMutation } from "@/hooks/useApiMutation";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
 type Mode =
@@ -21,15 +20,17 @@ export default function AddressesManager({
     const router = useRouter();
     const [addresses, setAddresses] = useState<AddressDTO[]>(initialAddresses);
     const [mode, setMode] = useState<Mode>({ kind: "list" });
+    const { execute } = useApiMutation();
 
     async function handleDelete(id: string) {
         if (!confirm("Delete this address?")) return;
-        const res = await csrfFetch(`/api/auth/me/addresses/${id}`, {
-            method: "DELETE",
-        });
-        if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            alert(formatApiError(data?.error, "Failed to delete"));
+        const result = await execute(
+            `/api/auth/me/addresses/${id}`,
+            { method: "DELETE" },
+            "Failed to delete",
+        );
+        if (!result.ok) {
+            alert(result.error);
             return;
         }
         setAddresses((prev) => prev.filter((a) => a.id !== id));
@@ -46,16 +47,14 @@ export default function AddressesManager({
                 : `/api/auth/me/addresses/${id}`;
         const method = id === undefined ? "POST" : "PUT";
 
-        const res = await csrfFetch(url, {
+        const result = await execute(url, {
             method,
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-            return formatApiError(data?.error, "Failed to save");
-        }
-        const saved: AddressDTO | undefined = data?.address;
+        }, "Failed to save");
+        if (!result.ok) return result.error;
+
+        const saved: AddressDTO | undefined = (result.data as { address?: AddressDTO })?.address;
         if (saved) {
             setAddresses((prev) =>
                 id === undefined
