@@ -3,23 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import type { OrderStatus } from "@repo/shared";
+import { getNextStatuses, type OrderStatus } from "@repo/shared";
 import { formatApiError } from "@/lib/formatApiError";
 import { ORDER_STATUS_LABELS } from "@/lib/order-status";
 import { csrfFetch } from "@/lib/csrf";
 
-// Mirrors the server-side ALLOWED_TRANSITIONS in orders.service.
 // REFUND is handled via POST /orders/:id/refund (calls Stripe), not status patch.
-const NEXT_STEPS: Record<OrderStatus, OrderStatus[]> = {
-    PENDING: ["PAID", "CANCELLED", "FAILED"],
-    PAID: ["PROCESSING", "REFUNDED"],
-    PROCESSING: ["SHIPPED", "REFUNDED"],
-    SHIPPED: ["DELIVERED", "REFUNDED"],
-    DELIVERED: ["REFUNDED"],
-    CANCELLED: [],
-    FAILED: [],
-    REFUNDED: [],
-};
 
 const TRANSITION_STYLES: Record<OrderStatus, string> = {
     PENDING: "bg-amber-500 hover:bg-amber-400 text-slate-900",
@@ -42,7 +31,7 @@ export default function OrderStatusControls({ orderId, currentStatus }: Props) {
     const [updating, setUpdating] = useState<OrderStatus | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const next = NEXT_STEPS[currentStatus];
+    const next = getNextStatuses(currentStatus);
 
     async function update(status: OrderStatus) {
         setUpdating(status);

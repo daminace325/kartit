@@ -4,6 +4,7 @@ import {
     calculatePricing,
     OrderStatus,
     PaymentStatus,
+    VALID_STATUS_TRANSITIONS,
     type OrderDTO,
     type OrderCreateInput,
     type OrderItemDTO,
@@ -40,29 +41,14 @@ const STOCK_RELEASE: ReadonlySet<OrderStatus> = new Set([
 
 // Allowed admin-driven status transitions. Customer-initiated cancel uses
 // the dedicated cancel route and is restricted to PENDING in Phase 1.
-export const ALLOWED_TRANSITIONS: Record<OrderStatus, ReadonlySet<OrderStatus>> = {
-    [OrderStatus.PENDING]: new Set([
-        OrderStatus.PAID,
-        OrderStatus.CANCELLED,
-        OrderStatus.FAILED,
-    ]),
-    [OrderStatus.PAID]: new Set([
-        OrderStatus.PROCESSING,
-        OrderStatus.REFUNDED,
-    ]),
-    [OrderStatus.PROCESSING]: new Set([
-        OrderStatus.SHIPPED,
-        OrderStatus.REFUNDED,
-    ]),
-    [OrderStatus.SHIPPED]: new Set([
-        OrderStatus.DELIVERED,
-        OrderStatus.REFUNDED,
-    ]),
-    [OrderStatus.DELIVERED]: new Set([OrderStatus.REFUNDED]),
-    [OrderStatus.CANCELLED]: new Set<OrderStatus>(),
-    [OrderStatus.FAILED]: new Set<OrderStatus>(),
-    [OrderStatus.REFUNDED]: new Set<OrderStatus>(),
-};
+// Sourced from @repo/shared so the client and server share one definition.
+export const ALLOWED_TRANSITIONS: Record<OrderStatus, ReadonlySet<OrderStatus>> =
+    Object.fromEntries(
+        Object.entries(VALID_STATUS_TRANSITIONS).map(([key, values]) => [
+            key,
+            new Set(values),
+        ]),
+    ) as unknown as Record<OrderStatus, ReadonlySet<OrderStatus>>;
 
 function toItemDTO(item: OrderWithItems["items"][number]): OrderItemDTO {
     return {
