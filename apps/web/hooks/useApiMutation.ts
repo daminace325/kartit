@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { csrfFetch } from "@/lib/csrf";
+import { apiFetch, ApiClientError, type FetchOptions } from "@/lib/apiClient";
 import { formatApiError } from "@/lib/formatApiError";
 
-type Success<T> = { ok: true; data: T; response: Response };
-type Failure = { ok: false; error: string; response: Response };
+type Success<T> = { ok: true; data: T };
+type Failure = { ok: false; error: string; status?: number };
 type MutationResult<T = unknown> = Success<T> | Failure;
 
 export function useApiMutation() {
@@ -18,27 +18,26 @@ export function useApiMutation() {
 
     async function execute<T = unknown>(
         url: string,
-        init: RequestInit = {},
+        init: FetchOptions = {},
         fallbackError = "Something went wrong",
     ): Promise<MutationResult<T>> {
         setLoading(true);
         setError(null);
         try {
-            const res = await csrfFetch(url, init);
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                const msg = formatApiError(data?.error, fallbackError);
-                setError(msg);
-                setLoading(false);
-                return { ok: false, error: msg, response: res };
-            }
+            const data = await apiFetch<T>(url, init);
             setLoading(false);
-            return { ok: true, data: data as T, response: res };
-        } catch {
-            const msg = "Network error. Please try again.";
+            return { ok: true, data };
+        } catch (err) {
+            const isApiErr = err instanceof ApiClientError;
+            const msg = isApiErr
+                ? formatApiError(
+                      { message: err.message, details: err.details },
+                      fallbackError,
+                  )
+                : "Network error. Please try again.";
             setError(msg);
             setLoading(false);
-            return { ok: false, error: msg, response: new Response() };
+            return { ok: false, error: msg, status: isApiErr ? err.status : undefined };
         }
     }
 

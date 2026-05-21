@@ -12,7 +12,7 @@ import {
     useStripe,
 } from "@stripe/react-stripe-js";
 import { formatMoney, type OrderDTO } from "@repo/shared";
-import { csrfFetch } from "@/lib/csrf";
+import { api, ApiClientError } from "@/lib/apiClient";
 import { formatApiError } from "@/lib/formatApiError";
 
 let stripePromise: Promise<Stripe | null> | null = null;
@@ -96,27 +96,10 @@ function PayForm({
             setLoading(true);
             setError(null);
             try {
-                // Fetch order to verify ownership and status.
-                const orderRes = await csrfFetch(
+                const orderData = await api.get<{ order: OrderDTO }>(
                     `/api/orders/${encodeURIComponent(orderId)}`,
                 );
-                const orderData = await orderRes.json().catch(() => ({}));
-                if (!orderRes.ok) {
-                    if (orderRes.status === 404) {
-                        setError("Order not found.");
-                    } else if (orderRes.status === 403) {
-                        setError("You don't have access to this order.");
-                    } else {
-                        setError(
-                            formatApiError(
-                                orderData?.error,
-                                "Failed to load order",
-                            ),
-                        );
-                    }
-                    return;
-                }
-                const o: OrderDTO = orderData.order;
+                const o = orderData.order;
                 if (o.status !== "PENDING") {
                     router.replace(`/orders/${encodeURIComponent(orderId)}`);
                     return;
@@ -124,29 +107,32 @@ function PayForm({
                 if (cancelled) return;
                 setOrder(o);
 
-                // Get or create a PaymentIntent for this order.
-                const intentRes = await csrfFetch("/api/payments/intent", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Idempotency-Key": newIdempotencyKey(),
+                const intentData = await api.post<{ clientSecret: string }>(
+                    "/api/payments/intent",
+                    { orderId },
+                    {
+                        headers: { "Idempotency-Key": newIdempotencyKey() },
                     },
-                    body: JSON.stringify({ orderId }),
-                });
-                const intentData = await intentRes.json().catch(() => ({}));
-                if (!intentRes.ok) {
-                    setError(
-                        formatApiError(
-                            intentData?.error,
-                            "Failed to initialize payment",
-                        ),
-                    );
-                    return;
-                }
+                );
                 if (cancelled) return;
                 setClientSecret(intentData.clientSecret);
-            } catch {
-                setError("Network error. Please try again.");
+            } catch (err) {
+                if (err instanceof ApiClientError) {
+                    if (err.status === 404) {
+                        setError("Order not found.");
+                    } else if (err.status === 403) {
+                        setError("You don't have access to this order.");
+                    } else {
+                        setError(
+                            formatApiError(
+                                { message: err.message, details: err.details },
+                                "Failed to load order",
+                            ),
+                        );
+                    }
+                } else {
+                    setError("Network error. Please try again.");
+                }
             } finally {
                 if (!cancelled) setLoading(false);
             }

@@ -33,11 +33,12 @@ export default function AddToCart({
             "Failed to add to cart",
         );
 
-        if (result.response.status === 401) {
-            router.push(`/signin?next=${encodeURIComponent(window.location.pathname)}`);
+        if (!result.ok) {
+            if (result.status === 401) {
+                router.push(`/signin?next=${encodeURIComponent(window.location.pathname)}`);
+            }
             return;
         }
-        if (!result.ok) return;
 
         setAdded(true);
         router.refresh();

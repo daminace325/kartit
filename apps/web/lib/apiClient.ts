@@ -30,7 +30,7 @@ export class ApiClientError extends Error {
     }
 }
 
-type FetchOptions = RequestInit & {
+export type FetchOptions = RequestInit & {
     /** Force "no-store" (default for mutations and authed reads). */
     cache?: RequestCache;
     /** Next.js revalidation tag/seconds (server only). */

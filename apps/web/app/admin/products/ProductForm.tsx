@@ -6,7 +6,7 @@ import { Upload, X, Loader2 } from "lucide-react";
 import { minorToMajor, majorToMinor, type ProductDTO, type ProductImageDTO } from "@repo/shared";
 import { slugify } from "@/lib/slugify";
 import { formatApiError } from "@/lib/formatApiError";
-import { csrfFetch } from "@/lib/csrf";
+import { api, ApiClientError } from "@/lib/apiClient";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
@@ -87,22 +87,24 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
                 }
                 const formData = new FormData();
                 formData.append("file", file);
-                const res = await csrfFetch("/api/images/upload", {
-                    method: "POST",
-                    body: formData,
-                });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                    setError(formatApiError(data?.error, "Upload failed"));
-                    break;
-                }
+                const data = await api.post<{ url: string; publicId: string }>(
+                    "/api/images/upload",
+                    formData,
+                );
                 setImages((prev) => [
                     ...prev,
                     { url: data.url, publicId: data.publicId },
                 ]);
             }
-        } catch {
-            setError("Network error during upload");
+        } catch (err) {
+            setError(
+                err instanceof ApiClientError
+                    ? formatApiError(
+                          { message: err.message, details: err.details },
+                          "Upload failed",
+                      )
+                    : "Network error during upload",
+            );
         } finally {
             setUploading(false);
             e.target.value = "";
@@ -114,8 +116,7 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
         setImages((prev) => prev.filter((_, i) => i !== idx));
         // Best-effort cleanup of the orphaned Cloudinary asset (ignore errors).
         if (img?.publicId) {
-            csrfFetch("/api/images", {
-                method: "DELETE",
+            api.delete("/api/images", {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ publicId: img.publicId }),
             }).catch(() => undefined);

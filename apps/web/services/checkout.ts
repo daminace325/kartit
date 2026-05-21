@@ -1,33 +1,23 @@
-import { csrfFetch } from "@/lib/csrf";
+import { api } from "@/lib/apiClient";
 
 export async function createOrder(
     idempotencyKey: string,
     shippingAddressId: string,
 ) {
-    const res = await csrfFetch("/api/orders", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Idempotency-Key": idempotencyKey,
-        },
-        body: JSON.stringify({ shippingAddressId }),
+    return api.post<{ order: { id: string } }>("/api/orders", {
+        shippingAddressId,
+    }, {
+        headers: { "Idempotency-Key": idempotencyKey },
     });
-    const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, data };
 }
 
 export async function createPaymentIntent(
     idempotencyKey: string,
     orderId: string,
 ) {
-    const res = await csrfFetch("/api/payments/intent", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Idempotency-Key": idempotencyKey,
-        },
-        body: JSON.stringify({ orderId }),
+    return api.post<{ clientSecret: string }>("/api/payments/intent", {
+        orderId,
+    }, {
+        headers: { "Idempotency-Key": idempotencyKey },
     });
-    const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, data };
 }
