@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { Check, Circle } from "lucide-react";
 import { api, ApiClientError } from "@/lib/apiClient";
-import { getCurrentUser } from "@/lib/auth";
+import { authRequired } from "@/lib/auth";
 import { formatMoney, type OrderDTO } from "@repo/shared";
 import {
     ORDER_CANCELLABLE,
@@ -25,8 +25,7 @@ export default async function OrderDetailPage({
     const { id } = await params;
     const { redirect_status: redirectStatus } = await searchParams;
     const justPaid = redirectStatus === "succeeded";
-    const user = await getCurrentUser();
-    if (!user) redirect(`/signin?next=/orders/${id}`);
+    await authRequired(`/orders/${id}`);
 
     let order: OrderDTO;
     try {

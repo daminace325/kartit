@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { UserPen, MapPin, KeyRound, ArrowLeft } from "lucide-react";
-import { getCurrentUser } from "@/lib/auth";
+import { authRequired } from "@/lib/auth";
 
 const items = [
     { href: "/profile", icon: UserPen, label: "Edit Profile" },
@@ -16,8 +15,7 @@ export default async function ProfileLayout({
 }: {
     children: React.ReactNode;
 }) {
-    const user = await getCurrentUser();
-    if (!user) redirect("/signin?next=/profile");
+    await authRequired("/profile");
 
     return (
         <main className="mx-auto max-w-6xl px-4 py-8">

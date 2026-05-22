@@ -4,6 +4,7 @@
  */
 
 import { cache } from "react";
+import { redirect } from "next/navigation";
 import { ApiClientError, apiFetch } from "./apiClient";
 import type { UserRole } from "@repo/shared";
 
@@ -27,3 +28,13 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
         throw err;
     }
 });
+
+/**
+ * Returns the current signed-in user or redirects to sign-in. Pass the page
+ * path as `returnTo` so the sign-in page redirects back after login.
+ */
+export async function authRequired(returnTo: string): Promise<SessionUser> {
+    const user = await getCurrentUser();
+    if (!user) redirect(`/signin?next=${encodeURIComponent(returnTo)}`);
+    return user;
+}

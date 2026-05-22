@@ -2,15 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { api, ApiClientError } from "@/lib/apiClient";
-import { getCurrentUser } from "@/lib/auth";
+import { authRequired } from "@/lib/auth";
 import type { AddressDTO, CartDTO, CartSummaryDTO } from "@repo/shared";
 import CheckoutClient from "@/components/CheckoutClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function CheckoutPage() {
-    const user = await getCurrentUser();
-    if (!user) redirect("/signin?next=/checkout");
+    await authRequired("/checkout");
 
     const publishableKey =
         process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";

@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ShoppingCart, AlertTriangle } from "lucide-react";
 import { api } from "@/lib/apiClient";
-import { getCurrentUser } from "@/lib/auth";
+import { authRequired } from "@/lib/auth";
 import { formatMoney, type CartDTO } from "@repo/shared";
 import CartItemControls from "@/components/CartItemControls";
 import ClearCartButton from "@/components/ClearCartButton";
@@ -10,8 +9,7 @@ import ClearCartButton from "@/components/ClearCartButton";
 export const dynamic = "force-dynamic";
 
 export default async function CartPage() {
-    const user = await getCurrentUser();
-    if (!user) redirect("/signin?next=/cart");
+    await authRequired("/cart");
 
     const { cart } = await api.get<{ cart: CartDTO }>("/cart");
     const items = cart.items;

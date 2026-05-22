@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Package } from "lucide-react";
 import { api } from "@/lib/apiClient";
-import { getCurrentUser } from "@/lib/auth";
+import { authRequired } from "@/lib/auth";
 import { formatMoney, type OrderListResponse } from "@repo/shared";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "@/lib/order-status";
 import { formatDate } from "@/lib/dates";
@@ -14,8 +13,7 @@ export default async function OrdersPage({
 }: {
     searchParams: Promise<{ cursor?: string }>;
 }) {
-    const user = await getCurrentUser();
-    if (!user) redirect("/signin?next=/orders");
+    await authRequired("/orders");
 
     const sp = await searchParams;
     const cursorQs = sp.cursor ? `?cursor=${encodeURIComponent(sp.cursor)}` : "";

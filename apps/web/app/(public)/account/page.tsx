@@ -1,14 +1,12 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ShoppingBag, UserPen, MapPin, KeyRound, LogOut, LayoutDashboard } from "lucide-react";
-import { getCurrentUser } from "@/lib/auth";
+import { authRequired } from "@/lib/auth";
 import SignOutButton from "@/components/SignOutButton";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
-    const user = await getCurrentUser();
-    if (!user) redirect("/signin?next=/account");
+    const user = await authRequired("/account");
 
     const tiles = [
         {

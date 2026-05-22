@@ -1,10 +1,10 @@
-import { getCurrentUser } from "@/lib/auth";
+import { authRequired } from "@/lib/auth";
 import ChangePasswordForm from "@/components/ChangePasswordForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function SecurityPage() {
-    const user = (await getCurrentUser())!;
+    const user = await authRequired("/profile/security");
 
     return (
         <div>

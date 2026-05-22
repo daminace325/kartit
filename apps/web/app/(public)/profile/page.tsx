@@ -1,10 +1,10 @@
-import { getCurrentUser } from "@/lib/auth";
+import { authRequired } from "@/lib/auth";
 import EditProfileForm from "@/components/EditProfileForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
-    const user = (await getCurrentUser())!;
+    const user = await authRequired("/profile");
 
     return (
         <div>
