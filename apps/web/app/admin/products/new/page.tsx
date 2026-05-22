@@ -1,6 +1,6 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { api } from "@/lib/apiClient";
+import { api } from "@/services/apiClient";
 import ProductForm from "../ProductForm";
 
 export const dynamic = "force-dynamic";

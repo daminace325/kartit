@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { api, ApiClientError } from "@/lib/apiClient";
+import { api, ApiClientError } from "@/services/apiClient";
 import { formatMoney, type OrderDTO } from "@repo/shared";
-import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "@/lib/order-status";
+import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "@/constants/order-status";
 import OrderStatusControls from "@/components/OrderStatusControls";
 import { formatDateTime } from "@/lib/dates";
 

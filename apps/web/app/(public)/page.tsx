@@ -1,5 +1,5 @@
-import Link from "next/link";
-import { api } from "@/lib/apiClient";
+﻿import Link from "next/link";
+import { api } from "@/services/apiClient";
 import type { ProductDTO } from "@repo/shared";
 import ProductCard from "@/components/ProductCard";
 

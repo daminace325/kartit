@@ -1,6 +1,6 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { ShoppingCart, AlertTriangle } from "lucide-react";
-import { api } from "@/lib/apiClient";
+import { api } from "@/services/apiClient";
 import { authRequired } from "@/lib/auth";
 import { formatMoney, type CartDTO } from "@repo/shared";
 import CartItemControls from "@/components/CartItemControls";

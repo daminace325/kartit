@@ -1,7 +1,7 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
-import { api, ApiClientError } from "@/lib/apiClient";
+import { api, ApiClientError } from "@/services/apiClient";
 import { authRequired } from "@/lib/auth";
 import type { AddressDTO, CartDTO, CartSummaryDTO } from "@repo/shared";
 import CheckoutClient from "@/components/CheckoutClient";

@@ -1,6 +1,6 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { Plus, Pencil } from "lucide-react";
-import { api } from "@/lib/apiClient";
+import { api } from "@/services/apiClient";
 import DeleteCategoryButton from "./DeleteCategoryButton";
 
 export const dynamic = "force-dynamic";

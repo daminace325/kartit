@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useApiMutation } from "@/hooks/useApiMutation";
-import { PASSWORD_MIN_LENGTH, PASSWORD_RULES_TEXT } from "@/lib/auth-constants";
+import { PASSWORD_MIN_LENGTH, PASSWORD_RULES_TEXT } from "@/lib/auth";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
 export default function ChangePasswordForm() {

@@ -1,6 +1,6 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { Package, FolderTree, ShoppingBag } from "lucide-react";
-import { api } from "@/lib/apiClient";
+import { api } from "@/services/apiClient";
 import type { OrderListResponse, ProductDTO } from "@repo/shared";
 
 export const dynamic = "force-dynamic";

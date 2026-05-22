@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { api, ApiClientError } from "@/lib/apiClient";
+import { api, ApiClientError } from "@/services/apiClient";
 import CategoryForm from "../../CategoryForm";
 
 export const dynamic = "force-dynamic";

@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { api } from "@/lib/apiClient";
+import { api } from "@/services/apiClient";
 
 export default function SignOutButton({ className }: { className?: string }) {
     const router = useRouter();

@@ -1,7 +1,7 @@
-import Link from "next/link";
-import { api } from "@/lib/apiClient";
+﻿import Link from "next/link";
+import { api } from "@/services/apiClient";
 import { formatMoney, type OrderListResponse } from "@repo/shared";
-import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "@/lib/order-status";
+import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "@/constants/order-status";
 import { formatDate } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";

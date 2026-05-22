@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronRight } from "lucide-react";
-import { api, ApiClientError } from "@/lib/apiClient";
+import { api, ApiClientError } from "@/services/apiClient";
 import { formatMoney, type ProductDTO } from "@repo/shared";
 import ProductGallery from "@/components/ProductGallery";
 import AddToCart from "@/components/AddToCart";

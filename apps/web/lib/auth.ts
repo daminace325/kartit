@@ -5,8 +5,12 @@
 
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import { ApiClientError, apiFetch } from "./apiClient";
+import { ApiClientError, apiFetch } from "@/services/apiClient";
 import type { UserRole } from "@repo/shared";
+
+export const PASSWORD_MIN_LENGTH = 8;
+
+export const PASSWORD_RULES_TEXT = `At least ${PASSWORD_MIN_LENGTH} characters.`;
 
 export type SessionUser = {
     id: string;

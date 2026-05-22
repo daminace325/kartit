@@ -12,7 +12,7 @@ import {
     useStripe,
 } from "@stripe/react-stripe-js";
 import { formatMoney, type OrderDTO } from "@repo/shared";
-import { api, ApiClientError } from "@/lib/apiClient";
+import { api, ApiClientError } from "@/services/apiClient";
 import { formatApiError } from "@/lib/formatApiError";
 
 let stripePromise: Promise<Stripe | null> | null = null;

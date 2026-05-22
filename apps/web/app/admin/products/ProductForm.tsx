@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -6,7 +6,7 @@ import { Upload, X, Loader2 } from "lucide-react";
 import { minorToMajor, majorToMinor, type ProductDTO, type ProductImageDTO } from "@repo/shared";
 import { slugify } from "@/lib/slugify";
 import { formatApiError } from "@/lib/formatApiError";
-import { api, ApiClientError } from "@/lib/apiClient";
+import { api, ApiClientError } from "@/services/apiClient";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { ErrorBanner } from "@/components/ErrorBanner";
 

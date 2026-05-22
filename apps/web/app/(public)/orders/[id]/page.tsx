@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Check, Circle } from "lucide-react";
-import { api, ApiClientError } from "@/lib/apiClient";
+import { api, ApiClientError } from "@/services/apiClient";
 import { authRequired } from "@/lib/auth";
 import { formatMoney, type OrderDTO } from "@repo/shared";
 import {
@@ -9,7 +9,7 @@ import {
     ORDER_STATUS_LABELS,
     ORDER_STATUS_STYLES,
     ORDER_TIMELINE,
-} from "@/lib/order-status";
+} from "@/constants/order-status";
 import CancelOrderButton from "@/components/CancelOrderButton";
 import { formatDateTime } from "@/lib/dates";
 

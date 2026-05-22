@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { getNextStatuses, type OrderStatus } from "@repo/shared";
 import { useApiMutation } from "@/hooks/useApiMutation";
-import { ORDER_STATUS_LABELS } from "@/lib/order-status";
+import { ORDER_STATUS_LABELS } from "@/constants/order-status";
 
 // REFUND is handled via POST /orders/:id/refund (calls Stripe), not status patch.
 

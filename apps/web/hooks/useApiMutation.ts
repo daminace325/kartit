@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
-import { apiFetch, ApiClientError, type FetchOptions } from "@/lib/apiClient";
+import { apiFetch, ApiClientError, type FetchOptions } from "@/services/apiClient";
 import { formatApiError } from "@/lib/formatApiError";
 
 type Success<T> = { ok: true; data: T };

@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import { loadStripe, type Stripe } from "@stripe/stripe-js";
-import { ApiClientError } from "@/lib/apiClient";
+import { ApiClientError } from "@/services/apiClient";
 import { formatApiError } from "@/lib/formatApiError";
 import { createOrder, createPaymentIntent } from "@/services/checkout";
 

@@ -1,5 +1,5 @@
-import type { AddressDTO } from "@repo/shared";
-import { api } from "@/lib/apiClient";
+﻿import type { AddressDTO } from "@repo/shared";
+import { api } from "@/services/apiClient";
 import AddressesManager from "@/components/AddressesManager";
 
 export const dynamic = "force-dynamic";
