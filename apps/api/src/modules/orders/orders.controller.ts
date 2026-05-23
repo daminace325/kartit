@@ -9,49 +9,45 @@ import { ordersService } from "./orders.service";
 import { AppError } from "../../lib/errors";
 import { asyncHandler } from "../../lib/asyncHandler";
 
-function userOrThrow(req: Parameters<RequestHandler>[0]) {
-    const user = req.user;
-    if (!user) throw AppError.unauthorized();
-    return user;
+function userIdOrThrow(req: Parameters<RequestHandler>[0]): string {
+    const id = req.user?.id;
+    if (!id) throw AppError.unauthorized();
+    return id;
 }
 
 export const createOrder = asyncHandler(async (req, res) => {
-    const user = userOrThrow(req);
+    const userId = userIdOrThrow(req);
     const input = req.body as OrderCreateInput;
-    const result = await ordersService.create(user.id, input);
+    const result = await ordersService.create(userId, input);
     res.status(201).json(result);
 });
 
 export const listOrders = asyncHandler(async (req, res) => {
-    const user = userOrThrow(req);
+    const userId = userIdOrThrow(req);
     const query = req.query as unknown as OrderListQuery;
-    const isAdmin = user.role === UserRole.ADMIN;
-    // Only treat the request as "list every order" when an admin
-    // explicitly opts in via ?scope=all. The default /orders view
-    // (e.g. the customer-facing "Your orders" page) must always be
-    // scoped to the caller, even for admins.
+    const isAdmin = req.user!.role === UserRole.ADMIN;
     const allOrders = isAdmin && query.scope === "all";
-    const result = await ordersService.list(user.id, allOrders, query);
+    const result = await ordersService.list(userId, allOrders, query);
     res.json(result);
 });
 
 export const getOrder = asyncHandler(async (req, res) => {
-    const user = userOrThrow(req);
+    const userId = userIdOrThrow(req);
     const id = String(req.params.id);
     const order = await ordersService.getById(
-        user.id,
-        user.role === UserRole.ADMIN,
+        userId,
+        req.user!.role === UserRole.ADMIN,
         id,
     );
     res.json({ order });
 });
 
 export const cancelOrder = asyncHandler(async (req, res) => {
-    const user = userOrThrow(req);
+    const userId = userIdOrThrow(req);
     const id = String(req.params.id);
     const order = await ordersService.cancel(
-        user.id,
-        user.role === UserRole.ADMIN,
+        userId,
+        req.user!.role === UserRole.ADMIN,
         id,
     );
     res.json({ order });
@@ -67,6 +63,5 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 export const refundOrder = asyncHandler(async (req, res) => {
     const id = String(req.params.id);
     const result = await ordersService.refundOrder(id);
-    // Return 202 Accepted - refund is async, actual status flip via webhook
     res.status(202).json(result);
 });

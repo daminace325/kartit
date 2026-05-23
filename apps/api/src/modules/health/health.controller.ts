@@ -1,15 +1,8 @@
-import { RequestHandler } from "express";
 import { healthService } from "./health.service";
+import { asyncHandler } from "../../lib/asyncHandler";
 
-export const checkHealth: RequestHandler = async (req, res) => {
-  try {
+export const checkHealth = asyncHandler(async (req, res) => {
     const result = await healthService.check();
-    res.json(result);
-  } catch (err) {
-    res.status(503).json({
-      status: "error",
-      db: "down",
-      message: err instanceof Error ? err.message : "unknown",
-    });
-  }
-};
+    const status = result.status === "ok" ? 200 : 503;
+    res.status(status).json(result);
+});
