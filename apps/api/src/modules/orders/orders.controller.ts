@@ -6,6 +6,8 @@ import {
     type OrderStatusUpdateInput,
 } from "@repo/shared";
 import { ordersService } from "./orders.service";
+import { ordersStatusService } from "./orders.status.service";
+import { ordersPaymentService } from "./orders.payment.service";
 import { AppError } from "../../lib/errors";
 import { asyncHandler } from "../../lib/asyncHandler";
 
@@ -56,12 +58,12 @@ export const cancelOrder = asyncHandler(async (req, res) => {
 export const updateOrderStatus = asyncHandler(async (req, res) => {
     const id = String(req.params.id);
     const { status } = req.body as OrderStatusUpdateInput;
-    const order = await ordersService.adminUpdateStatus(id, status);
+    const order = await ordersStatusService.adminUpdateStatus(id, status);
     res.json({ order });
 });
 
 export const refundOrder = asyncHandler(async (req, res) => {
     const id = String(req.params.id);
-    const result = await ordersService.refundOrder(id);
+    const result = await ordersPaymentService.refundOrder(id);
     res.status(202).json(result);
 });

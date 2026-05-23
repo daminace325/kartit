@@ -5,7 +5,7 @@ import { env } from "../../config/env";
 import { AppError } from "../../lib/errors";
 import { getStripe } from "../../lib/stripe";
 import { logger } from "../../lib/logger";
-import { ordersService } from "../orders/orders.service";
+import { ordersPaymentService } from "../orders/orders.payment.service";
 import { paymentsService } from "./payments.service";
 import { asyncHandler } from "../../lib/asyncHandler";
 
@@ -79,7 +79,7 @@ export const stripeWebhook = asyncHandler(async (req, res) => {
     switch (event.type) {
         case "payment_intent.succeeded": {
             const intent = event.data.object as Stripe.PaymentIntent;
-            const order = await ordersService.markPaidByPaymentIntent(intent.id);
+            const order = await ordersPaymentService.markPaidByPaymentIntent(intent.id);
             if (!order) {
                 logger.warn(
                     `[stripe] payment_intent.succeeded for unknown intent ${intent.id}`,
@@ -93,7 +93,7 @@ export const stripeWebhook = asyncHandler(async (req, res) => {
                 intent.last_payment_error?.message ??
                 intent.last_payment_error?.code ??
                 undefined;
-            const order = await ordersService.markFailedByPaymentIntent(
+            const order = await ordersPaymentService.markFailedByPaymentIntent(
                 intent.id,
                 reason,
             );
@@ -108,7 +108,7 @@ export const stripeWebhook = asyncHandler(async (req, res) => {
             const charge = event.data.object as Stripe.Charge;
             // charge.payment_intent is the PaymentIntent ID
             const paymentIntentId = charge.payment_intent as string;
-            const order = await ordersService.markRefundedByPaymentIntent(
+            const order = await ordersPaymentService.markRefundedByPaymentIntent(
                 paymentIntentId,
             );
             if (!order) {
