@@ -5,8 +5,7 @@ import { useState } from "react";
 import { Upload, X, Loader2 } from "lucide-react";
 import { minorToMajor, majorToMinor, type ProductDTO, type ProductImageDTO } from "@repo/shared";
 import { slugify } from "@/lib/slugify";
-import { formatApiError } from "@/lib/formatApiError";
-import { api, ApiClientError } from "@/services/apiClient";
+import { api } from "@/services/apiClient";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
@@ -77,38 +76,29 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
         const files = e.target.files;
         if (!files || files.length === 0) return;
         setUploading(true);
-        setError(null);
+        clearError();
 
-        try {
-            for (const file of Array.from(files)) {
-                if (images.length >= 6) {
-                    setError("Maximum 6 images per product");
-                    break;
-                }
-                const formData = new FormData();
-                formData.append("file", file);
-                const data = await api.post<{ url: string; publicId: string }>(
-                    "/images/upload",
-                    formData,
-                );
-                setImages((prev) => [
-                    ...prev,
-                    { url: data.url, publicId: data.publicId },
-                ]);
+        for (const file of Array.from(files)) {
+            if (images.length >= 6) {
+                setError("Maximum 6 images per product");
+                break;
             }
-        } catch (err) {
-            setError(
-                err instanceof ApiClientError
-                    ? formatApiError(
-                          { message: err.message, details: err.details },
-                          "Upload failed",
-                      )
-                    : "Network error during upload",
+            const formData = new FormData();
+            formData.append("file", file);
+            const result = await execute<{ url: string; publicId: string }>(
+                "/images/upload",
+                { method: "POST", body: formData },
+                "Upload failed",
             );
-        } finally {
-            setUploading(false);
-            e.target.value = "";
+            if (!result.ok) break;
+            setImages((prev) => [
+                ...prev,
+                { url: result.data.url, publicId: result.data.publicId },
+            ]);
         }
+
+        setUploading(false);
+        e.target.value = "";
     }
 
     async function removeImage(idx: number) {
