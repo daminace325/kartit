@@ -1,5 +1,5 @@
 import { prisma } from "@repo/db";
-import { OrderStatus } from "@repo/shared";
+import { ErrorCode, OrderStatus } from "@repo/shared";
 import type { OrderDTO } from "@repo/shared";
 import { AppError } from "../../lib/errors";
 import {
@@ -33,7 +33,7 @@ export const ordersStatusService = {
             const allowed = ALLOWED_TRANSITIONS[current];
             if (!allowed.has(next)) {
                 throw AppError.conflict(
-                    "INVALID_STATUS_TRANSITION",
+                    ErrorCode.ORDER_INVALID_STATE,
                     `Cannot transition order from '${current}' to '${next}'`,
                 );
             }
@@ -49,7 +49,7 @@ export const ordersStatusService = {
             });
             if (result.count !== 1) {
                 throw AppError.conflict(
-                    "INVALID_STATUS_TRANSITION",
+                    ErrorCode.ORDER_INVALID_STATE,
                     "Order status changed, refresh and retry",
                 );
             }

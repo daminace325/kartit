@@ -221,7 +221,7 @@ describe("Orders API", () => {
                 .set("X-Requested-With", "fetch");
 
             expect(cancelRes.status).toBe(409);
-            expect(cancelRes.body.error.code).toBe("INVALID_STATUS_TRANSITION");
+            expect(cancelRes.body.error.code).toBe("ORDER_INVALID_STATE");
         });
     });
 });

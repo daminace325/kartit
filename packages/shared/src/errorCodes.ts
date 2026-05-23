@@ -21,7 +21,6 @@ export const ErrorCode = {
     // Orders / payments
     CART_EMPTY: "CART_EMPTY",
     ORDER_INVALID_STATE: "ORDER_INVALID_STATE",
-    PAYMENT_FAILED: "PAYMENT_FAILED",
 
     // Idempotency (P1.1)
     IDEMPOTENCY_CONFLICT: "IDEMPOTENCY_CONFLICT",

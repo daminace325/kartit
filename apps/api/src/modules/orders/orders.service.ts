@@ -2,6 +2,7 @@ import { prisma } from "@repo/db";
 import type { Prisma } from "@repo/db";
 import {
     calculatePricing,
+    ErrorCode,
     OrderStatus,
     PaymentStatus,
     VALID_STATUS_TRANSITIONS,
@@ -293,7 +294,7 @@ export const ordersService = {
             // status transitions.
             if (existing.status !== OrderStatus.PENDING) {
                 throw AppError.conflict(
-                    "INVALID_STATUS_TRANSITION",
+                    ErrorCode.ORDER_INVALID_STATE,
                     `Order cannot be cancelled in status '${existing.status}'`,
                 );
             }
@@ -305,7 +306,7 @@ export const ordersService = {
             });
             if (result.count !== 1) {
                 throw AppError.conflict(
-                    "INVALID_STATUS_TRANSITION",
+                    ErrorCode.ORDER_INVALID_STATE,
                     "Order status changed, refresh and retry",
                 );
             }
