@@ -21,7 +21,7 @@ async function addToCart(token: string, productId: string, quantity = 1) {
 
 async function createAddress(token: string, overrides?: Record<string, string>) {
     return request(app)
-        .post("/auth/me/addresses")
+        .post("/addresses")
         .set("Cookie", `ecomm_auth=${token}`)
         .set("X-Requested-With", "fetch")
         .send({
