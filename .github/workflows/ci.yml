@@ -72,5 +72,5 @@ jobs:
           key: prisma-engines-${{ runner.os }}-${{ hashFiles('packages/db/prisma/schema.prisma') }}
           restore-keys: |
             prisma-engines-${{ runner.os }}-
-      - run: npm ci
+      - run: npm ci --include=optional
       - run: npm run build
