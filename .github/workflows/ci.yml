@@ -73,4 +73,5 @@ jobs:
           restore-keys: |
             prisma-engines-${{ runner.os }}-
       - run: npm ci --include=optional
+      - run: npm install @tailwindcss/oxide-linux-x64-gnu --no-save
       - run: npm run build
