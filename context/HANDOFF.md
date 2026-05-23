@@ -369,7 +369,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.21 | Console.log/error → structured logging prep | ✅ Done |
 | 1.22 | Test suite (unit + integration) | ✅ Done |
 | 1.23 | GitHub Actions CI | ✅ Done |
-| 1.24 | Multi-stage Dockerfiles | ⬜ Not started |
+| 1.24 | Multi-stage Dockerfiles | ✅ Done |
 | 1.25 | OpenAPI spec at /docs | ⬜ Not started |
 | 1.26 | Sentry on API + web | ⬜ Not started |
 | 1.27 | README upgrade | ⬜ Not started |
@@ -508,7 +508,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - **Fix**: Removed the `isProd` guard — `JWT_SECRET` must be ≥32 chars in all environments. Also dropped "in production" from the error message.
 - **Risk addressed**: A short JWT secret in development/staging trivially allows HS256 token forgery, which is a security bug regardless of environment.
 
-#### 1.20 — `.gitignore` ignores `.editorconfig`
+#### 1.20 — `.gitignore` ignores `.editorconfig` (SKIPPED on purpose)
 - **Current**: [.gitignore:37](.gitignore#L37) — `.editorconfig` is listed under "Editor / OS" ignores.
 - **Context**: The HANDOFF says "stop ignoring `.editorconfig` at minimum" if the repo is going to GitHub for resume review. The file enforces 4-space indentation and LF line endings project-wide.
 - **Fix**: Remove `.editorconfig` from `.gitignore`. Also review whether `context/` (line 60) should remain ignored or be committed (handoff docs may be useful to reviewers).
@@ -553,9 +553,23 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - **Node version:** 22 (within project's `>=20.19 <23` range)
 - **Note:** `test:web` skipped — web has no test suite yet (deferred to future). Block-PR-merge-on-red must be configured in GitHub repo settings (Settings → Branches → main → Require status checks).
 
-#### 1.24 — Multi-stage Dockerfiles
-- `apps/api/Dockerfile`, `apps/web/Dockerfile`: multi-stage, non-root user, `HEALTHCHECK` against `/health/live`.
-- Test locally with `docker compose --profile build up`.
+#### 1.24 — Multi-stage Dockerfiles ✅ DONE
+- **`apps/api/Dockerfile`:**
+  - Two-stage: `build` (compiles TypeScript + prisma generate, with `python3 make g++` for argon2 native build) → `prod` (Alpine, copies `node_modules`, built `dist/`, prisma migrations + config).
+  - Non-root user `nodejs` (1001:1001).
+  - `HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD wget -qO- http://localhost:5000/health/live || exit 1`.
+  - CMD runs `db:migrate:deploy && db:seed && node apps/api/dist/server.js` (matching Render blueprint).
+  - `ENV PORT=5000`, `EXPOSE 5000`.
+- **`apps/web/Dockerfile`:**
+  - Two-stage: `build` (compiles workspace packages + `next build` with `output: "standalone"`) → `prod`.
+  - Non-root user `nodejs` (1001:1001).
+  - `HEALTHCHECK` against `http://localhost:3000/` (Next.js has no dedicated health route; the public homepage suffices).
+  - Standalone output is copied to `/app/` (flat), plus `.next/static` and `public/`.
+  - Build args for `NEXT_PUBLIC_*` vars (inlined at build time).
+  - `ENV PORT=3000`, `EXPOSE 3000`.
+- **`next.config.ts`:** Added `output: "standalone"` for production Docker builds.
+- **`.dockerignore`:** Created at repo root (excludes `node_modules`, `dist`, `.next`, `.env*`, `.git`, tests, docs, etc.).
+- **`docker-compose.yml`:** Added `api` and `web` services under the `build` profile. Use: `docker compose --profile build up`. The `api` service depends on `postgres` (healthy); the `web` service depends on `api`.
 
 #### 1.25 — OpenAPI spec served at `/docs`
 - Use `@asteasolutions/zod-to-openapi` to generate from the existing `@repo/shared` schemas.
