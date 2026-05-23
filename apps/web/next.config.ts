@@ -4,6 +4,10 @@ const API_URL =
     process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
 
 const nextConfig: NextConfig = {
+    // Standalone output for Docker: produces a self-contained server.js +
+    // minimal node_modules so the production image stays small.
+    output: "standalone",
+
     // Workspace packages ship TypeScript sources alongside built dist/.
     // Telling Next to transpile them means hot-reload works in dev when
     // editing packages/*/src/* and we don't need a watch-mode tsc for them.
