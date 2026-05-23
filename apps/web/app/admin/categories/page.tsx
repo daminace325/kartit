@@ -1,7 +1,7 @@
 ﻿import Link from "next/link";
 import { Plus, Pencil } from "lucide-react";
 import { api } from "@/services/apiClient";
-import DeleteCategoryButton from "./DeleteCategoryButton";
+import DeleteButton from "@/components/DeleteButton";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +66,7 @@ export default async function AdminCategoriesPage() {
                                                 <Pencil className="h-4 w-4" />
                                                 Edit
                                             </Link>
-                                            <DeleteCategoryButton id={c.id} name={c.name} />
+                                            <DeleteButton entityType="category" id={c.id} name={c.name} />
                                         </div>
                                     </td>
                                 </tr>

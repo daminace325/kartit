@@ -3,7 +3,7 @@ import { Plus, Pencil } from "lucide-react";
 import { api } from "@/services/apiClient";
 import { formatMoney, type ProductDTO } from "@repo/shared";
 import { productImageUrl } from "@/lib/image";
-import DeleteProductButton from "./DeleteProductButton";
+import DeleteButton from "@/components/DeleteButton";
 
 export const dynamic = "force-dynamic";
 
@@ -110,7 +110,7 @@ export default async function AdminProductsPage() {
                                                     <Pencil className="h-4 w-4" />
                                                     Edit
                                                 </Link>
-                                                <DeleteProductButton id={p.id} name={p.name} />
+                                                <DeleteButton entityType="product" id={p.id} name={p.name} />
                                             </div>
                                         </td>
                                     </tr>
