@@ -4,7 +4,6 @@ import {
     signinSchema,
     changePasswordSchema,
     updateProfileSchema,
-    addressInputSchema,
 } from "@repo/shared";
 import { validate } from "../../middlewares/validate";
 import { requireAuth } from "../../middlewares/requireAuth";
@@ -16,10 +15,6 @@ import {
     changePassword,
     updateProfile,
     signOutAll,
-    listAddresses,
-    createAddress,
-    updateAddress,
-    deleteAddress,
 } from "./auth.controller";
 
 export const authRouter: Router = Router();
@@ -41,18 +36,3 @@ authRouter.post(
     changePassword,
 );
 authRouter.post("/sign-out-all", requireAuth, signOutAll);
-
-authRouter.get("/me/addresses", requireAuth, listAddresses);
-authRouter.post(
-    "/me/addresses",
-    requireAuth,
-    validate(addressInputSchema),
-    createAddress,
-);
-authRouter.put(
-    "/me/addresses/:id",
-    requireAuth,
-    validate(addressInputSchema),
-    updateAddress,
-);
-authRouter.delete("/me/addresses/:id", requireAuth, deleteAddress);

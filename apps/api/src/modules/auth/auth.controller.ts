@@ -45,31 +45,3 @@ export const updateProfile: RequestHandler = async (req, res) => {
     const user = await authService.updateProfile(req.user.id, req.body);
     res.json({ user });
 };
-
-export const listAddresses: RequestHandler = async (req, res) => {
-    if (!req.user) throw AppError.unauthorized();
-    const addresses = await authService.listAddresses(req.user.id);
-    res.json({ addresses });
-};
-
-export const createAddress: RequestHandler = async (req, res) => {
-    if (!req.user) throw AppError.unauthorized();
-    const address = await authService.createAddress(req.user.id, req.body);
-    res.status(201).json({ address });
-};
-
-export const updateAddress: RequestHandler = async (req, res) => {
-    if (!req.user) throw AppError.unauthorized();
-    const address = await authService.updateAddress(
-        req.user.id,
-        String(req.params.id),
-        req.body,
-    );
-    res.json({ address });
-};
-
-export const deleteAddress: RequestHandler = async (req, res) => {
-    if (!req.user) throw AppError.unauthorized();
-    await authService.deleteAddress(req.user.id, String(req.params.id));
-    res.status(204).end();
-};

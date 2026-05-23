@@ -18,7 +18,7 @@ export default async function CheckoutPage() {
     const { cart } = await api.get<{ cart: CartDTO }>("/cart");
     if (cart.items.length === 0) redirect("/cart");
     const { addresses } = await api.get<{ addresses: AddressDTO[] }>(
-        "/auth/me/addresses",
+        "/addresses",
     );
 
     let summary: CartSummaryDTO;

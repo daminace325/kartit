@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AddressesPage() {
     const { addresses } = await api.get<{ addresses: AddressDTO[] }>(
-        "/auth/me/addresses",
+        "/addresses",
     );
 
     return (

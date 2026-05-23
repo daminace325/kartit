@@ -12,6 +12,7 @@ import { imagesRouter } from "./modules/images/images.routes";
 import { cartRouter } from "./modules/cart/cart.routes";
 import { ordersRouter } from "./modules/orders/orders.routes";
 import { paymentsRouter } from "./modules/payments/payments.routes";
+import { addressesRouter } from "./modules/addresses/addresses.routes";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 import { csrfMiddleware } from "./middlewares/csrf";
 
@@ -118,6 +119,7 @@ export function createApp() {
     app.use("/images", imagesRouter);
     app.use("/cart", cartRouter);
     app.use("/orders", ordersRouter);
+    app.use("/addresses", addressesRouter);
 
     app.use(notFoundHandler);
     app.use(errorHandler);

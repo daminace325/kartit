@@ -25,7 +25,7 @@ export default function AddressesManager({
     async function handleDelete(id: string) {
         if (!confirm("Delete this address?")) return;
         const result = await execute(
-            `/auth/me/addresses/${id}`,
+            `/addresses/${id}`,
             { method: "DELETE" },
             "Failed to delete",
         );
@@ -43,8 +43,8 @@ export default function AddressesManager({
     ): Promise<string | null> {
         const url =
             id === undefined
-                ? "/auth/me/addresses"
-                : `/auth/me/addresses/${id}`;
+                ? "/addresses"
+                : `/addresses/${id}`;
         const method = id === undefined ? "POST" : "PUT";
 
         const result = await execute(url, {
