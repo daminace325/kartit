@@ -1,5 +1,5 @@
 import type { RequestHandler } from "express";
-import { destroyByPublicIds, uploadBufferToCloudinary } from "../../lib/cloudinary";
+import { imagesService } from "./images.service";
 import { AppError } from "../../lib/errors";
 import { asyncHandler } from "../../lib/asyncHandler";
 import type { DeleteImageInput } from "@repo/shared";
@@ -9,12 +9,12 @@ export const uploadImage = asyncHandler(async (req, res) => {
     if (!file) {
         throw AppError.badRequest("VALIDATION_FAILED", "No file provided (field name: 'file')");
     }
-    const result = await uploadBufferToCloudinary(file.buffer);
+    const result = await imagesService.upload(file);
     res.status(201).json(result);
 });
 
 export const deleteImage = asyncHandler(async (req, res) => {
     const { publicId } = req.body as DeleteImageInput;
-    await destroyByPublicIds([publicId]);
+    await imagesService.remove(publicId);
     res.json({ ok: true });
 });
