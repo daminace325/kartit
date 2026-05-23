@@ -368,7 +368,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.20 | .gitignore ignores .editorconfig | ⏸️ Skipped |
 | 1.21 | Console.log/error → structured logging prep | ✅ Done |
 | 1.22 | Test suite (unit + integration) | ✅ Done |
-| 1.23 | GitHub Actions CI | ⬜ Not started |
+| 1.23 | GitHub Actions CI | ✅ Done |
 | 1.24 | Multi-stage Dockerfiles | ⬜ Not started |
 | 1.25 | OpenAPI spec at /docs | ⬜ Not started |
 | 1.26 | Sentry on API + web | ⬜ Not started |
@@ -545,10 +545,13 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - **Exported** `ALLOWED_TRANSITIONS` from [orders.service.ts](apps/api/src/modules/orders/orders.service.ts) for testability.
 - **Scripts:** `npm run test -w apps/api` (all), `npm run test:watch -w apps/api`, `npm run test:unit -w apps/api` (unit only), `npm run test:integration -w apps/api` (integration only). Root also has `npm run test` and `npm run test:api`.
 
-#### 1.23 — GitHub Actions CI
-- `.github/workflows/ci.yml`: matrix `lint` → `typecheck` → `test:api` (with PG service container) → `test:web` → `build`.
-- Block PR merge on red.
-- Cache npm + Prisma engines.
+#### 1.23 — GitHub Actions CI ✅ DONE
+- **File:** `.github/workflows/ci.yml`
+- **Jobs:** `lint` (web eslint) → `typecheck` (api + web via root script) → `test:api` (vitest + Testcontainers, requires Docker) → `build` (full monorepo, depends on all prior jobs)
+- **Caching:** npm cache via `setup-node`; Prisma engine cache via `actions/cache` keyed on schema hash
+- **Test infrastructure:** Uses existing Testcontainers setup (Postgres 16 Alpine container started programmatically in `globalSetup.ts`). `ubuntu-latest` runners have Docker pre-installed.
+- **Node version:** 22 (within project's `>=20.19 <23` range)
+- **Note:** `test:web` skipped — web has no test suite yet (deferred to future). Block-PR-merge-on-red must be configured in GitHub repo settings (Settings → Branches → main → Require status checks).
 
 #### 1.24 — Multi-stage Dockerfiles
 - `apps/api/Dockerfile`, `apps/web/Dockerfile`: multi-stage, non-root user, `HEALTHCHECK` against `/health/live`.
