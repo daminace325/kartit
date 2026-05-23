@@ -52,7 +52,7 @@ Build a production-grade ecomm app for resume → target **Rippling SE I (FinTec
 - **Stick with Express** (not Nest/Fastify)
 - **Cloudinary:** current code uses server-side multer upload (`/images/upload`); Phase 1 should either keep and document that or switch to signed direct-from-browser uploads (`/images/sign`). Max 6 images per product; transformations done at render time via URL params (no eager transforms)
 - **`ProductImage` as separate model** with array
-- **Skip per-workspace `.env.example` files** *(a single root `.env.example` exists — fine to keep)*
+- **`.env.example` files exist at root, `apps/api/`, and `apps/web/`** — each documents its own required env vars
 - **No markdown docs unless asked**
 - **Phase boundaries:** P1 may add small support tables/fields (`IdempotencyKey`, `WebhookEvent`, `Order` address snapshot fields, `tokenVersion`) when they're needed by a fix. The big infra tables (`Outbox`, `LedgerEntry`, `RefreshToken` family, `Reservation`) and the `apps/worker` service land in P2.
 - **Step-by-step**, verify each step before moving on
@@ -109,12 +109,15 @@ ecomm/
         config/env.ts            ← validated env loader (prod-required keys, JWT length,
                                    SameSite=none ⇒ Secure check, multi-origin CORS)
         lib/
-          errors.ts              ← AppError class
-          jwt.ts                 ← signToken / verifyToken (HS256)
+          asyncHandler.ts        ← async request handler wrapper (try/catch → next(err))
+          cache.ts               ← TtlCache (in-process LRU for requireAuth hot path)
+          cloudinary.ts          ← uploadBufferToCloudinary + destroyByPublicIds
           cookies.ts             ← setAuthCookie / clearAuthCookie (httpOnly)
+          errors.ts              ← AppError class with static factories
+          jwt.ts                 ← signToken / verifyToken (HS256, embeds tokenVersion)
+          logger.ts              ← thin logger.info/.warn/.error (console wrapper; P2 → pino)
           password.ts            ← argon2id hash/verify
-          cloudinary.ts          ← server SDK init + signed-upload helpers
-          stripe.ts              ← Stripe SDK singleton
+          stripe.ts              ← Stripe SDK singleton (pinned API version)
         middlewares/
           errorHandler.ts        ← errorHandler + notFoundHandler
           validate.ts            ← zod request validator (ZodType, Zod v4)
@@ -124,12 +127,15 @@ ecomm/
           upload.ts              ← multer setup for any direct-upload endpoints
         modules/
           health/                ← /health (DB ping) + /health/live (no DB; Render probe)
-          auth/                  ← auth.controller.ts + auth.service.ts; /auth/signup, /signin, /signout, /sign-out-all, /me, /change-password, profile, addresses
+          auth/                  ← auth.{controller,service,routes}.ts; /auth/signup, /signin, /signout, /sign-out-all, /me, /change-password, profile
+          addresses/             ← addresses.{controller,service,routes}.ts; /addresses CRUD
           categories/            ← public GET + admin CRUD
           products/              ← public GET + admin CRUD
           images/                ← POST /images/upload + DELETE /images
-          cart/                  ← /cart GET, add, update, remove, clear
-          orders/                ← /orders create, list, detail, cancel; admin status transitions
+          cart/                  ← /cart GET, add, update, remove, clear, summary
+          orders/                ← /orders create, list, detail, cancel; admin status transitions + refund
+                                    orders.{routes,controller,service}.ts +
+                                    orders.payment.service.ts + orders.status.service.ts
           payments/              ← /payments/webhook (raw body), /payments/intent (create PI for order)
         app.ts                   ← createApp(): trust-proxy, helmet, multi-origin CORS,
                                    /payments mounted BEFORE express.json() (raw webhook),
@@ -137,6 +143,7 @@ ecomm/
         server.ts                ← env.PORT, graceful shutdown on SIGINT/SIGTERM
     web/
       .env.local                 ← NEXT_PUBLIC_API_URL=http://localhost:5000
+      .env.example               ← template with NEXT_PUBLIC_* vars documented
       AGENTS.md / CLAUDE.md / README.md
       app/
         layout.tsx, error.tsx, global-error.tsx, not-found.tsx, globals.css
@@ -160,9 +167,13 @@ ecomm/
                                    CartBadge, CartItemControls, ClearCartButton,
                                    CheckoutClient, AddressesManager, EditProfileForm,
                                    ChangePasswordForm, SignOutButton, AdminSidebar,
-                                   OrderStatusControls, CancelOrderButton
-      lib/                       ← api.ts, auth.ts, auth_constants.ts, errors.ts,
-                                   image.ts, order_status.ts, strings.ts
+                                   OrderStatusControls, CancelOrderButton,
+                                   ErrorBanner, DeleteButton
+      components/payment/        ← PayForm (Stripe PaymentElement + idempotency key cleanup)
+      lib/                       ← auth.ts, dates.ts, formatApiError.ts, image.ts, slugify.ts
+      hooks/                     ← useApiMutation.ts, useIdempotencyKey.ts, useStripeCheckout.ts
+      services/                  ← apiClient.ts, checkout.ts
+      constants/                 ← order-status.ts (status labels, styles, timeline)
   packages/
     db/
       .env                       ← DATABASE_URL (for Prisma CLI)
@@ -175,25 +186,32 @@ ecomm/
         seed.ts                  ← admin user + categories + products w/ images
     shared/
       src/
-        index.ts                 ← barrel + API_URL
-        money.ts                 ← formatMoney, parseMoney, decimalsFor
+        index.ts                 ← barrel re-exporting everything below
+        money.ts                 ← formatMoney, minorToMajor, majorToMinor, parseMoney, decimalsFor
         enums.ts                 ← UserRole, OrderStatus, PaymentStatus (string unions)
-        errors.ts                ← ErrorCode enum + ApiError types
-        pricing.ts               ← subtotal / shipping / tax / total helpers
+        errorCodes.ts            ← ErrorCode const object (VALIDATION_FAILED, UNAUTHORIZED, etc.)
+        apiError.ts              ← ApiError type (code, message, details?)
+        pricing.ts               ← calculatePricing (subtotal / shipping / tax / total helpers)
         cloudinary.ts            ← cloudinaryUrl(publicId, preset) render-time helper
+        order-transitions.ts     ← VALID_STATUS_TRANSITIONS + getNextStatuses()
         schemas/
           auth.ts                ← signup, signin, changePassword, profile, address
-          product.ts             ← productCreate, listQuery, ProductDTO, image array (max 6)
-          cart.ts                ← cartAddItem, cartUpdateItem
-          order.ts               ← orderCreate, OrderDTO, CreateOrderResponse,
-                                   admin status-transition schemas
+          category.ts            ← categoryCreate, categoryUpdate, categoryListQuery
+          product.ts             ← productCreate, productUpdate, listQuery, ProductDTO, ProductImageDTO (max 6)
+          cart.ts                ← cartAddItem, cartUpdateItem, CartDTO, CartItemDTO, CartSummaryDTO
+          order.ts               ← orderCreate, paymentIntent, OrderDTO, CreateOrderResponse,
+                                   PaymentIntentResponse, admin status-transition schemas
+          image.ts               ← deleteImageSchema
 ```
 
 ## Env files (real values, not committed)
 
 - `ecomm/.env` — `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL` (compose + Prisma CLI)
+- `ecomm/.env.example` — template for the above
 - `ecomm/apps/api/.env` — `PORT=5000`, `DATABASE_URL`, `JWT_SECRET` (≥32 chars), `JWT_EXPIRES_IN=7d`, `COOKIE_NAME=ecomm_auth`, `COOKIE_SECURE`, `COOKIE_SAMESITE` (`lax`/`strict`/`none`; `none` requires Secure), `WEB_ORIGINS` (comma-separated; supports single-`*` host wildcards like `https://*.vercel.app`), `CLOUDINARY_CLOUD_NAME`/`API_KEY`/`API_SECRET`/`FOLDER`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CURRENCY=USD`
-- `ecomm/apps/web/.env.local` — `NEXT_PUBLIC_API_URL=http://localhost:5000`
+- `ecomm/apps/api/.env.example` — template for the above
+- `ecomm/apps/web/.env.local` — `NEXT_PUBLIC_API_URL=http://localhost:5000`, `NEXT_PUBLIC_AUTH_COOKIE_NAME=ecomm_auth`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`
+- `ecomm/apps/web/.env.example` — template for the above
 - `ecomm/packages/db/.env` — `DATABASE_URL` (separate, for Prisma CLI)
 
 ## Key gotchas / decisions
@@ -208,7 +226,7 @@ ecomm/
 - **`trust proxy: 1`** is set so Render's LB gives correct `req.secure` / `req.ip` and the `Secure` cookie attribute behaves.
 - **Auth rate-limit:** 30 req / 15 min on `/auth/signin` + `/auth/signup` (`express-rate-limit`, draft-7 headers).
 - **P1 schema progress:** `IdempotencyKey`, `WebhookEvent`, order address snapshot fields, `User.tokenVersion` — all implemented. P2-only: `Outbox`, `LedgerEntry`, `RefreshToken` rotation family, `Reservation`.
-- **Repo polish gotcha:** `.gitignore` currently ignores `.editorconfig` and `context/`; keep that intentional only if handoff/config remain local-only. If this repo is going to GitHub for resume review, stop ignoring `.editorconfig` at minimum.
+- **Repo polish gotcha:** `.gitignore` currently ignores `.editorconfig`. `context/` is commented out in `.gitignore` (committed). If this repo is going to GitHub for resume review, stop ignoring `.editorconfig`.
 - **Migration command:** `npm run db:migrate:dev -- --name <name>` from root (or directly in `packages/db`).
 - **`migrate dev` auto-runs `generate`** — don't run generate separately unless after a fresh `npm install`.
 - **Render deploy:** start command runs `db:migrate:deploy && db:seed && start:api`. Seed must be idempotent.
@@ -261,10 +279,10 @@ cd ecomm; npm install -D <pkg> -w apps/web
   - Card (product grid): `w_400,h_400,c_fill,q_auto,f_auto`
   - Detail main (gallery): `w_1200,h_1200,c_limit,q_auto,f_auto`
 
-## API surface (Foundation, current)
+## API surface (current)
 
 ```
-GET    /                       hello
+GET    /                       { message: "API is running" }
 GET    /health                 DB ping
 GET    /health/live            liveness (Render)
 
@@ -273,9 +291,13 @@ POST   /auth/signin            (rate-limited)
 POST   /auth/signout
 POST   /auth/sign-out-all       invalidate all sessions (requires auth)
 GET    /auth/me
+PATCH  /auth/me                 update profile
 POST   /auth/change-password
-PATCH  /auth/me
-GET/POST/PUT/DELETE /auth/me/addresses[/:id]
+
+GET    /addresses               list own addresses
+POST   /addresses               create address
+PUT    /addresses/:id           update own address
+DELETE /addresses/:id           delete own address
 
 GET    /categories
 GET    /categories/slug/:slug
@@ -284,7 +306,7 @@ POST   /categories             (admin)
 PUT    /categories/:id         (admin)
 DELETE /categories/:id         (admin)
 
-GET    /products               (q?, categoryId?, cursor?, limit?)
+GET    /products               (q?, categoryId?, categoryIds?, cursor?, limit?)
 GET    /products/slug/:slug
 GET    /products/:id
 POST   /products               (admin)
@@ -299,9 +321,10 @@ POST   /cart/items
 PATCH  /cart/items/:productId
 DELETE /cart/items/:productId
 DELETE /cart                   (clear)
+POST   /cart/summary            (pricing breakdown via calculatePricing from @repo/shared)
 
 POST   /orders                 (from cart, idempotent)
-GET    /orders                 (own)
+GET    /orders                 (own; admin can pass ?scope=all)
 GET    /orders/:id
 POST   /orders/:id/cancel
 PATCH  /orders/:id/status      (admin: PROCESSING / SHIPPED / DELIVERED) — NOT REFUNDED
@@ -344,7 +367,14 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.19 | JWT_SECRET min length only enforced in prod | ✅ Done |
 | 1.20 | .gitignore ignores .editorconfig | ⏸️ Skipped |
 | 1.21 | Console.log/error → structured logging prep | ✅ Done |
-| 1.22 | Test suite (unit + integration, 62 tests) | ✅ Done |
+| 1.22 | Test suite (unit + integration) | ✅ Done |
+| 1.23 | GitHub Actions CI | ⬜ Not started |
+| 1.24 | Multi-stage Dockerfiles | ⬜ Not started |
+| 1.25 | OpenAPI spec at /docs | ⬜ Not started |
+| 1.26 | Sentry on API + web | ⬜ Not started |
+| 1.27 | README upgrade | ⬜ Not started |
+| 1.28 | Optimistic cart UI | ⬜ Not started |
+| 1.29 | SEO basics | ⬜ Not started |
 
 ### Tier S — correctness & money-safety (do these first, in order)
 
@@ -392,8 +422,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 
 #### 1.7 — CSRF protection on cookie-auth POSTs ✅ DONE
 - **Server:** `apps/api/src/middlewares/csrf.ts` — requires `X-Requested-With: fetch` header on all mutating requests (POST/PUT/PATCH/DELETE); excludes `/payments/webhook`
-- **Web client:** `X-Requested-With: fetch` added to api.ts for all mutating requests
-- **Helper:** `apps/web/lib/csrf.ts` for components using raw fetch; updated 17 files (auth pages, cart, orders, profile, admin forms)
+- **Web client:** `X-Requested-With: fetch` added to `services/apiClient.ts` for all mutating requests
 - GET requests are safe and don't require the header
 
 #### 1.8 — Session invalidation on password change / sign-out-all ✅ DONE
