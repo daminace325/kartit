@@ -34,7 +34,10 @@ export function formatMoney(
  * parseMoney("19.99", "USD") -> 1999n
  * Throws if the input is not a valid number for the given currency.
  */
-export function minorToMajor(minor: string | number | bigint, decimals: number): string {
+export function minorToMajor(minor: string | number | bigint, currency: string): string;
+export function minorToMajor(minor: string | number | bigint, decimals: number): string;
+export function minorToMajor(minor: string | number | bigint, arg: string | number): string {
+    const decimals = typeof arg === "string" ? decimalsFor(arg) : arg;
     const m = BigInt(minor);
     if (decimals === 0) return m.toString();
     const factor = 10n ** BigInt(decimals);
@@ -43,7 +46,10 @@ export function minorToMajor(minor: string | number | bigint, decimals: number):
     return `${whole}.${frac}`;
 }
 
-export function majorToMinor(major: string, decimals: number): string {
+export function majorToMinor(major: string, currency: string): string;
+export function majorToMinor(major: string, decimals: number): string;
+export function majorToMinor(major: string, arg: string | number): string {
+    const decimals = typeof arg === "string" ? decimalsFor(arg) : arg;
     const trimmed = major.trim();
     if (!/^\d+(\.\d+)?$/.test(trimmed)) throw new Error("Invalid price");
     const [whole, frac = ""] = trimmed.split(".");

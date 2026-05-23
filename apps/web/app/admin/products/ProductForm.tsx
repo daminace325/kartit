@@ -46,7 +46,7 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
     const [slugTouched, setSlugTouched] = useState(Boolean(initial?.slug));
     const [description, setDescription] = useState(initial?.description ?? "");
     const [price, setPrice] = useState<string>(
-        initial?.priceMinor !== undefined ? minorToMajor(initial.priceMinor, 2) : "",
+        initial?.priceMinor !== undefined ? minorToMajor(initial.priceMinor, initialCurrency) : "",
     );
     const [currency, setCurrency] = useState(initialCurrency);
     const [stock, setStock] = useState<string>(
@@ -118,7 +118,7 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
 
         let priceMinor: string;
         try {
-            priceMinor = majorToMinor(price, 2);
+            priceMinor = majorToMinor(price, currency);
         } catch {
             setError("Price must be a valid number (e.g. 19.99)");
             return;
