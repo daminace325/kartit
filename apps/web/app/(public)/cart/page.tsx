@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { ShoppingCart, AlertTriangle } from "lucide-react";
 import { api } from "@/services/apiClient";
 import { authRequired } from "@/lib/auth";
@@ -80,7 +80,7 @@ export default async function CartPage() {
                                         {item.productName}
                                     </Link>
                                     <p className="text-sm text-slate-400">
-                                        {formatMoney(BigInt(item.unitPriceMinor), item.currency)}{" "}
+                                        {formatMoney(item.unitPriceMinor, item.currency)}{" "}
                                         each
                                     </p>
                                     {!item.isActive && (
@@ -129,7 +129,7 @@ export default async function CartPage() {
                                 Subtotal ({totalQty} item{totalQty === 1 ? "" : "s"})
                             </dt>
                             <dd>
-                                {formatMoney(BigInt(cart.subtotalMinor), cart.currency)}
+                                {formatMoney(cart.subtotalMinor, cart.currency)}
                             </dd>
                         </div>
                         <div className="flex justify-between text-slate-300">
@@ -139,7 +139,7 @@ export default async function CartPage() {
                         <div className="flex justify-between border-t border-slate-700 pt-3 text-base font-semibold text-white">
                             <dt>Total</dt>
                             <dd>
-                                {formatMoney(BigInt(cart.subtotalMinor), cart.currency)}
+                                {formatMoney(cart.subtotalMinor, cart.currency)}
                             </dd>
                         </div>
                     </dl>

@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { Plus, Pencil } from "lucide-react";
 import { api } from "@/services/apiClient";
 import { formatMoney, type ProductDTO } from "@repo/shared";
@@ -75,7 +75,7 @@ export default async function AdminProductsPage() {
                                             </code>
                                         </td>
                                         <td className="px-4 py-3 text-slate-300">
-                                            {formatMoney(BigInt(p.priceMinor), p.currency)}
+                                            {formatMoney(p.priceMinor, p.currency)}
                                         </td>
                                         <td className="px-4 py-3">
                                             <span

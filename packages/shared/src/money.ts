@@ -15,7 +15,7 @@ export function decimalsFor(currency: string): number {
  * formatMoney(1999n, "USD") -> "$19.99"
  */
 export function formatMoney(
-    amountMinor: bigint | number,
+    amountMinor: bigint | number | string,
     currency: string,
     locale: string = "en-US",
 ): string {

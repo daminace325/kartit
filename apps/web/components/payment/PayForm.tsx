@@ -80,7 +80,7 @@ export function PayForm({
                         Processing...
                     </>
                 ) : (
-                    `Pay ${formatMoney(BigInt(totalMinor), currency)}`
+                    `Pay ${formatMoney(totalMinor, currency)}`
                 )}
             </button>
             <p className="text-center text-xs text-slate-500">

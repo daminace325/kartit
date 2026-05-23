@@ -182,7 +182,7 @@ function PayForm({
                 {" · "}
                 <span className="text-slate-400">Total:{" "}</span>
                 <span className="font-semibold text-white">
-                    {formatMoney(BigInt(order.totalMinor), order.currency)}
+                    {formatMoney(order.totalMinor, order.currency)}
                 </span>
             </div>
 
@@ -274,7 +274,7 @@ function StripePayForm({
                         Processing...
                     </>
                 ) : (
-                    `Pay ${formatMoney(BigInt(totalMinor), currency)}`
+                    `Pay ${formatMoney(totalMinor, currency)}`
                 )}
             </button>
             <p className="text-center text-xs text-slate-500">

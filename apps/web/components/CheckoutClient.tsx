@@ -85,11 +85,11 @@ export default function CheckoutClient(props: Props) {
                                         </div>
                                         <div className="text-xs text-slate-400">
                                             Qty {row.quantity} ·{" "}
-                                            {formatMoney(BigInt(row.unitPriceMinor), currency)} each
+                                            {formatMoney(row.unitPriceMinor, currency)} each
                                         </div>
                                     </div>
                                     <div className="text-sm font-medium text-white">
-                                        {formatMoney(BigInt(row.lineTotalMinor), currency)}
+                                        {formatMoney(row.lineTotalMinor, currency)}
                                     </div>
                                 </div>
                             </div>
@@ -215,7 +215,7 @@ export default function CheckoutClient(props: Props) {
                     <dl className="mt-4 space-y-2 text-sm">
                         <div className="flex justify-between text-slate-300">
                             <dt>Subtotal</dt>
-                            <dd>{formatMoney(BigInt(subtotalMinor), currency)}</dd>
+                            <dd>{formatMoney(subtotalMinor, currency)}</dd>
                         </div>
                         <div className="flex justify-between text-slate-300">
                             <dt>
@@ -229,7 +229,7 @@ export default function CheckoutClient(props: Props) {
                             <dd>
                                 {BigInt(shippingMinor) === 0n
                                     ? "Free"
-                                    : formatMoney(BigInt(shippingMinor), currency)}
+                                    : formatMoney(shippingMinor, currency)}
                             </dd>
                         </div>
                         <div className="flex justify-between text-slate-300">
@@ -242,13 +242,13 @@ export default function CheckoutClient(props: Props) {
                             <dd>
                                 {BigInt(taxMinor) === 0n
                                     ? "—"
-                                    : formatMoney(BigInt(taxMinor), currency)}
+                                    : formatMoney(taxMinor, currency)}
                             </dd>
                         </div>
                         <div className="my-3 h-px bg-slate-700" />
                         <div className="flex justify-between text-base font-semibold text-white">
                             <dt>Total</dt>
-                            <dd>{formatMoney(BigInt(totalMinor), currency)}</dd>
+                            <dd>{formatMoney(totalMinor, currency)}</dd>
                         </div>
                     </dl>
                 </div>

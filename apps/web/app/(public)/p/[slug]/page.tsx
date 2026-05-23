@@ -58,7 +58,7 @@ export default async function ProductDetailPage({
 
                     <div className="mt-6 flex items-baseline gap-3">
                         <span className="text-3xl font-bold text-white">
-                            {formatMoney(BigInt(product.priceMinor), product.currency)}
+                            {formatMoney(product.priceMinor, product.currency)}
                         </span>
                     </div>
 

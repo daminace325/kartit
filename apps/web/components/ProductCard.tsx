@@ -30,7 +30,7 @@ export default function ProductCard({ product }: { product: CardProduct }) {
             </div>
             <h3 className="mt-2 line-clamp-2 text-sm text-slate-200">{product.name}</h3>
             <p className="mt-auto pt-2 text-base font-semibold text-white">
-                {formatMoney(BigInt(product.priceMinor), product.currency)}
+                {formatMoney(product.priceMinor, product.currency)}
             </p>
         </Link>
     );
