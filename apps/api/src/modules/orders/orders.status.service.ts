@@ -5,6 +5,7 @@ import { AppError } from "../../lib/errors";
 import {
     ALLOWED_TRANSITIONS,
     ORDER_INCLUDE,
+    restoreInventory,
     STOCK_HELD,
     STOCK_RELEASE,
     toOrderDTO,
@@ -53,14 +54,8 @@ export const ordersStatusService = {
                 );
             }
 
-            // Restore stock when transitioning held → release.
             if (STOCK_HELD.has(current) && STOCK_RELEASE.has(next)) {
-                for (const item of existing.items) {
-                    await tx.product.update({
-                        where: { id: item.productId },
-                        data: { stock: { increment: item.quantity } },
-                    });
-                }
+                await restoreInventory(tx, existing.items);
             }
 
             return tx.order.findUniqueOrThrow({

@@ -8,6 +8,7 @@ import { AppError } from "../../lib/errors";
 import { getStripe } from "../../lib/stripe";
 import {
     ORDER_INCLUDE,
+    restoreInventory,
     STOCK_HELD,
     toOrderDTO,
 } from "./orders.service";
@@ -144,13 +145,7 @@ export const ordersPaymentService = {
                 },
             });
 
-            // Restore inventory.
-            for (const item of order.items) {
-                await tx.product.update({
-                    where: { id: item.productId },
-                    data: { stock: { increment: item.quantity } },
-                });
-            }
+            await restoreInventory(tx, order.items);
 
             return tx.order.findUniqueOrThrow({
                 where: { id: order.id },
@@ -190,13 +185,7 @@ export const ordersPaymentService = {
                 data: { status: PaymentStatus.REFUNDED },
             });
 
-            // Restore inventory.
-            for (const item of order.items) {
-                await tx.product.update({
-                    where: { id: item.productId },
-                    data: { stock: { increment: item.quantity } },
-                });
-            }
+            await restoreInventory(tx, order.items);
 
             return tx.order.findUniqueOrThrow({
                 where: { id: order.id },

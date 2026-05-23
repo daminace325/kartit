@@ -86,6 +86,18 @@ export function toOrderDTO(order: OrderWithItems): OrderDTO {
     };
 }
 
+export async function restoreInventory(
+    tx: Prisma.TransactionClient,
+    items: Array<{ productId: string; quantity: number }>,
+): Promise<void> {
+    for (const item of items) {
+        await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { increment: item.quantity } },
+        });
+    }
+}
+
 export const ordersService = {
     async create(
         userId: string,
@@ -298,13 +310,7 @@ export const ordersService = {
                 );
             }
 
-            // Restore inventory (PENDING was a stock-held status).
-            for (const item of existing.items) {
-                await tx.product.update({
-                    where: { id: item.productId },
-                    data: { stock: { increment: item.quantity } },
-                });
-            }
+            await restoreInventory(tx, existing.items);
 
             return tx.order.findUniqueOrThrow({
                 where: { id },

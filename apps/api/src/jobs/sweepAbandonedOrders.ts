@@ -2,6 +2,7 @@ import { prisma } from "@repo/db";
 import { OrderStatus, PaymentStatus } from "@repo/shared";
 import { getStripe } from "../lib/stripe";
 import { logger } from "../lib/logger";
+import { restoreInventory } from "../modules/orders/orders.service";
 
 const ABANDONED_THRESHOLD_MINUTES = 30;
 
@@ -70,13 +71,7 @@ async function sweepAbandonedOrders(): Promise<number> {
                     data: { status: OrderStatus.CANCELLED },
                 });
 
-                // Restore inventory for each item.
-                for (const item of order.items) {
-                    await tx.product.update({
-                        where: { id: item.productId },
-                        data: { stock: { increment: item.quantity } },
-                    });
-                }
+                await restoreInventory(tx, order.items);
 
                 // Mark payment as failed.
                 if (payment) {
