@@ -377,7 +377,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.26 | Sentry on API + web | ⬜ Not started |
 | 1.27 | README upgrade | ✅ Done |
 | 1.28 | Optimistic cart UI | ✅ Done |
-| 1.29 | SEO basics | ⬜ Not started |
+| 1.29 | SEO basics | ✅ Done |
 
 ### Tier S — correctness & money-safety (do these first, in order)
 
@@ -602,8 +602,10 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
   - Button disabled state and display both driven by `optimisticQty` (not the prop `qty`), so UI never lags behind rapid clicks.
 - **CartBadge fix:** [CartBadge.tsx](apps/web/components/CartBadge.tsx) simplified to accept `count` prop instead of fetching in `useEffect`. [Navbar.tsx](apps/web/components/Navbar.tsx) now fetches cart count server-side and passes it down. `router.refresh()` re-renders the Navbar (server component), so the badge updates immediately after any cart mutation.
 
-#### 1.29 — SEO basics
-- `app/sitemap.ts`, `app/robots.ts`, OG metadata on product detail pages.
+#### 1.29 — SEO basics ✅ DONE
+- **[sitemap.ts](apps/web/app/sitemap.ts):** Dynamic sitemap (`force-dynamic`) enumerates home, search, all active products (cursor-paginated, priority 0.8, weekly), and all categories (priority 0.7, weekly). Resolves `SITE_URL` from `NEXT_PUBLIC_SITE_URL` → `VERCEL_URL` → `http://localhost:3000`.
+- **[robots.ts](apps/web/app/robots.ts):** Allows `*`, disallows `/account/`, `/admin/`, `/profile/`, `/checkout/`, `/orders/`, `/api/`. Points to `/sitemap.xml`.
+- **[p/[slug]/page.tsx](apps/web/app/(public)/p/[slug]/page.tsx):** `generateMetadata` returns product name, description (truncated to 200 chars), and OG image (first product image via Cloudinary card preset, 400×400).
 
 ### Tier B — ecomm domain depth
 

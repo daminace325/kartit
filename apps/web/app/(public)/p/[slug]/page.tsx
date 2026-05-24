@@ -1,14 +1,51 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { ChevronRight } from "lucide-react";
 import { api, ApiClientError } from "@/services/apiClient";
 import { formatMoney, type ProductDTO } from "@repo/shared";
+import { productImageUrl } from "@/lib/image";
 import ProductGallery from "@/components/ProductGallery";
 import AddToCart from "@/components/AddToCart";
 
 type Category = { id: string; slug: string; name: string };
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+    params,
+}: {
+    params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+    const { slug } = await params;
+
+    let product: ProductDTO;
+    try {
+        ({ product } = await api.get<{ product: ProductDTO }>(
+            `/products/slug/${encodeURIComponent(slug)}`,
+        ));
+    } catch {
+        return { title: "Product not found" };
+    }
+
+    const description =
+        product.description.length > 200
+            ? product.description.slice(0, 197) + "..."
+            : product.description;
+
+    const cover = [...product.images].sort((a, b) => a.position - b.position)[0];
+    const ogImage = productImageUrl(cover, "card");
+
+    return {
+        title: product.name,
+        description,
+        openGraph: {
+            title: product.name,
+            description,
+            ...(ogImage && { images: [{ url: ogImage, width: 400, height: 400 }] }),
+        },
+    };
+}
 
 export default async function ProductDetailPage({
     params,
