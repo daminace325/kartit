@@ -375,7 +375,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.24 | Multi-stage Dockerfiles | ✅ Done |
 | 1.25 | OpenAPI spec at /docs | ✅ Done |
 | 1.26 | Sentry on API + web | ⬜ Not started |
-| 1.27 | README upgrade | ⬜ Not started |
+| 1.27 | README upgrade | ✅ Done |
 | 1.28 | Optimistic cart UI | ⬜ Not started |
 | 1.29 | SEO basics | ⬜ Not started |
 
@@ -588,14 +588,12 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
   - `GET /docs` — Swagger UI (served by `swagger-ui-express`, branded "KartIt API Docs"). Gated behind `requireAdmin` in production, open in dev.
 - **`apps/api/src/app.ts`:** `docsRouter` mounted at `/docs`.
 
-#### 1.26 — Sentry on API + web
+#### 1.26 — Sentry on API + web (SKIPPED on purpose)
 - `@sentry/node` in `app.ts`; `@sentry/nextjs` in `web`. Tag `release` from git sha.
 
-#### 1.27 — README upgrade
-- Architecture diagram (mermaid).
-- "Run locally in 60s" block.
-- Test card numbers + how to fire webhooks via Stripe CLI.
-- Live demo link + screenshots.
+#### 1.27 — README upgrade ✅ DONE
+- **Created** [README.md](README.md) with architecture diagram (mermaid), tech stack table, "Run locally in 60s" guide, Stripe test cards table + webhook CLI instructions, full API overview, project structure, available scripts, testing guide, and deployment checklist.
+- **Skipped:** live demo link + screenshots (explicitly excluded).
 
 #### 1.28 — Optimistic cart UI
 - `useOptimistic` in [CartItemControls.tsx](apps/web/components/CartItemControls.tsx) for +/- — instant feedback, settle on response, roll back on error.
