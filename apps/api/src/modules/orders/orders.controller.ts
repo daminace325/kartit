@@ -8,6 +8,7 @@ import {
 import { ordersService } from "./orders.service";
 import { ordersStatusService } from "./orders.status.service";
 import { ordersPaymentService } from "./orders.payment.service";
+import { refundRequestService } from "./orders.refund-request.service";
 import { AppError } from "../../lib/errors";
 import { asyncHandler } from "../../lib/asyncHandler";
 
@@ -66,4 +67,59 @@ export const refundOrder = asyncHandler(async (req, res) => {
     const id = String(req.params.id);
     const result = await ordersPaymentService.refundOrder(id);
     res.status(202).json(result);
+});
+
+export const requestRefund = asyncHandler(async (req, res) => {
+    const userId = userIdOrThrow(req);
+    const orderId = String(req.params.id);
+    const reason = (req.body as { reason?: string }).reason;
+    const refundRequest = await refundRequestService.request(
+        userId,
+        orderId,
+        reason,
+    );
+    res.status(201).json({ refundRequest });
+});
+
+export const approveRefundRequest = asyncHandler(async (req, res) => {
+    const adminUserId = userIdOrThrow(req);
+    const requestId = String(req.params.id);
+    const refundRequest = await refundRequestService.approve(
+        adminUserId,
+        requestId,
+        (orderId) => ordersPaymentService.refundOrder(orderId),
+    );
+    res.json({ refundRequest });
+});
+
+export const rejectRefundRequest = asyncHandler(async (req, res) => {
+    const adminUserId = userIdOrThrow(req);
+    const requestId = String(req.params.id);
+    const refundRequest = await refundRequestService.reject(
+        adminUserId,
+        requestId,
+    );
+    res.json({ refundRequest });
+});
+
+export const listRefundRequests = asyncHandler(async (req, res) => {
+    const query = req.query as { status?: string; cursor?: string; limit?: string };
+    const result = await refundRequestService.list({
+        status: query.status,
+        cursor: query.cursor,
+        limit: query.limit ? parseInt(query.limit, 10) : undefined,
+    });
+    res.json(result);
+});
+
+export const getRefundRequestByOrder = asyncHandler(async (req, res) => {
+    const userId = userIdOrThrow(req);
+    const isAdmin = req.user!.role === UserRole.ADMIN;
+    const orderId = String(req.params.id);
+    const refundRequest = await refundRequestService.getByOrderId(
+        userId,
+        isAdmin,
+        orderId,
+    );
+    res.json({ refundRequest });
 });

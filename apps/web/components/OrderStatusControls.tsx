@@ -7,7 +7,7 @@ import { getNextStatuses, type OrderStatus } from "@repo/shared";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { ORDER_STATUS_LABELS } from "@/constants/order-status";
 
-// REFUND is handled via POST /orders/:id/refund (calls Stripe), not status patch.
+// REFUND is handled via the refund-request approval flow, not status patch.
 
 const TRANSITION_STYLES: Record<OrderStatus, string> = {
     PENDING: "bg-amber-500 hover:bg-amber-400 text-slate-900",
@@ -28,26 +28,17 @@ interface Props {
 export default function OrderStatusControls({ orderId, currentStatus }: Props) {
     const router = useRouter();
     const [activeStatus, setActiveStatus] = useState<OrderStatus | null>(null);
-    const { execute, loading, error, clearError } = useApiMutation();
+    const { execute, loading, error } = useApiMutation();
 
     const next = getNextStatuses(currentStatus);
 
     async function update(status: OrderStatus) {
         setActiveStatus(status);
-        const isRefund = status === "REFUNDED";
-        const url = isRefund
-            ? `/orders/${orderId}/refund`
-            : `/orders/${orderId}/status`;
-        const method = isRefund ? "POST" : "PATCH";
-        const body = isRefund
-            ? undefined
-            : JSON.stringify({ status });
-
-        const result = await execute(url, {
-            method,
-            headers: body ? { "Content-Type": "application/json" } : undefined,
-            body,
-        }, isRefund ? "Failed to initiate refund" : "Failed to update status");
+        const result = await execute(`/orders/${orderId}/status`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+        }, "Failed to update status");
 
         setActiveStatus(null);
         if (!result.ok) return;
@@ -83,8 +74,6 @@ export default function OrderStatusControls({ orderId, currentStatus }: Props) {
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                         Updating...
                                     </>
-                                ) : status === "REFUNDED" ? (
-                                    "Initiate Refund"
                                 ) : (
                                     `Mark as ${ORDER_STATUS_LABELS[status]}`
                                 )}

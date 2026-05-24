@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Check, Circle } from "lucide-react";
+import { Check, Circle, PackageCheck } from "lucide-react";
 import { api, ApiClientError } from "@/services/apiClient";
 import { authRequired } from "@/lib/auth";
 import { formatMoney, type OrderDTO } from "@repo/shared";
@@ -11,9 +11,21 @@ import {
     ORDER_TIMELINE,
 } from "@/constants/order-status";
 import CancelOrderButton from "@/components/CancelOrderButton";
+import RequestRefundButton from "@/components/RequestRefundButton";
 import { formatDateTime } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
+
+type RefundRequestDTO = {
+    id: string;
+    orderId: string;
+    status: string;
+    reason: string | null;
+    reviewedBy: string | null;
+    reviewedAt: string | null;
+};
+
+const REFUND_WINDOW_DAYS = 7;
 
 export default async function OrderDetailPage({
     params,
@@ -37,11 +49,38 @@ export default async function OrderDetailPage({
         throw err;
     }
 
+    // Fetch any existing refund request for this order
+    let refundRequest: RefundRequestDTO | null = null;
+    try {
+        const res = await api.get<{ refundRequest: RefundRequestDTO | null }>(
+            `/orders/${encodeURIComponent(id)}/refund-request`,
+        );
+        refundRequest = res.refundRequest;
+    } catch {
+        // If the endpoint fails, just don't show refund request info
+    }
+
     const isCancelled = order.status === "CANCELLED";
     const isFailed = order.status === "FAILED";
+    const isDelivered = order.status === "DELIVERED";
+    const isShipped = order.status === "SHIPPED";
     const showTimeline = !isCancelled && !isFailed;
     const currentTimelineIdx = ORDER_TIMELINE.indexOf(order.status);
     const canCancel = ORDER_CANCELLABLE.includes(order.status);
+
+    // 7-day refund window from delivery
+    let withinRefundWindow = false;
+    if (isDelivered) {
+        const deliveredAt = order.deliveredAt ?? order.updatedAt;
+        const deadline = new Date(deliveredAt);
+        deadline.setDate(deadline.getDate() + REFUND_WINDOW_DAYS);
+        withinRefundWindow = new Date() < deadline;
+    }
+
+    const showRefundButton = isDelivered && withinRefundWindow && !refundRequest;
+    const showRefundRequested = refundRequest && refundRequest.status === "PENDING";
+    const showRefundApproved = refundRequest && refundRequest.status === "APPROVED";
+    const showRefundRejected = refundRequest && refundRequest.status === "REJECTED";
 
     return (
         <div className="mx-auto max-w-5xl">
@@ -68,7 +107,44 @@ export default async function OrderDetailPage({
                     <div className="mt-1 font-mono text-xs text-slate-500">#{order.id}</div>
                 </div>
                 {canCancel && <CancelOrderButton orderId={order.id} />}
+                {showRefundButton && <RequestRefundButton orderId={order.id} />}
             </div>
+
+            {isShipped && (
+                <section className="mt-6 rounded-md border border-violet-500/30 bg-violet-500/10 p-4 text-sm text-violet-200">
+                    <PackageCheck className="mr-2 inline h-4 w-4" />
+                    Your order is on its way. Cancellation is not available for shipped
+                    items — you can request a refund after delivery.
+                </section>
+            )}
+
+            {showRefundRequested && (
+                <section className="mt-6 rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
+                    Refund requested — pending admin review. You&apos;ll be notified once
+                    a decision is made.
+                </section>
+            )}
+
+            {showRefundApproved && (
+                <section className="mt-6 rounded-md border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+                    Your refund has been approved. The amount will be returned to your
+                    original payment method.
+                </section>
+            )}
+
+            {showRefundRejected && (
+                <section className="mt-6 rounded-md border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
+                    Your refund request has been declined. If you believe this is an
+                    error, please contact support.
+                </section>
+            )}
+
+            {isDelivered && !withinRefundWindow && !refundRequest && (
+                <section className="mt-6 rounded-md border border-slate-500/30 bg-slate-500/10 p-4 text-sm text-slate-400">
+                    The refund window ({REFUND_WINDOW_DAYS} days from delivery) has
+                    closed.
+                </section>
+            )}
 
             {order.status === "PENDING" && justPaid && (
                 <section className="mt-6 rounded-md border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-100">

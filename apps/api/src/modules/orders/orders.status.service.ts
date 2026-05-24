@@ -45,6 +45,9 @@ export const ordersStatusService = {
                     ...(next === OrderStatus.PAID && !existing.paidAt
                         ? { paidAt: new Date() }
                         : {}),
+                    ...(next === OrderStatus.DELIVERED && !existing.deliveredAt
+                        ? { deliveredAt: new Date() }
+                        : {}),
                 },
             });
             if (result.count !== 1) {

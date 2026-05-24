@@ -21,31 +21,30 @@ describe("Order status transitions", () => {
         expect(allowed.has(OrderStatus.SHIPPED)).toBe(false);
     });
 
-    it("PAID allows PROCESSING only", () => {
+    it("PAID allows PROCESSING only (cancel via dedicated route)", () => {
         const allowed = ALLOWED_TRANSITIONS.PAID;
         expect(allowed.has(OrderStatus.PROCESSING)).toBe(true);
-        expect(allowed.has(OrderStatus.REFUNDED)).toBe(false);
         expect(allowed.has(OrderStatus.CANCELLED)).toBe(false);
+        expect(allowed.has(OrderStatus.REFUNDED)).toBe(false);
         expect(allowed.has(OrderStatus.SHIPPED)).toBe(false);
     });
 
-    it("DELIVERED only allows REFUNDED", () => {
+    it("PROCESSING allows SHIPPED only (cancel via dedicated route)", () => {
+        const allowed = ALLOWED_TRANSITIONS.PROCESSING;
+        expect(allowed.has(OrderStatus.SHIPPED)).toBe(true);
+        expect(allowed.has(OrderStatus.CANCELLED)).toBe(false);
+        expect(allowed.has(OrderStatus.REFUNDED)).toBe(false);
+    });
+
+    it("DELIVERED is terminal (refunds via webhook only)", () => {
         const allowed = ALLOWED_TRANSITIONS.DELIVERED;
-        expect(allowed.has(OrderStatus.REFUNDED)).toBe(true);
-        expect(allowed.size).toBe(1);
+        expect(allowed.size).toBe(0);
     });
 
     it("terminal statuses have no allowed transitions", () => {
         expect(ALLOWED_TRANSITIONS.CANCELLED.size).toBe(0);
         expect(ALLOWED_TRANSITIONS.FAILED.size).toBe(0);
         expect(ALLOWED_TRANSITIONS.REFUNDED.size).toBe(0);
-    });
-
-    it("only DELIVERED is refundable", () => {
-        // Only delivered orders can be refunded
-        expect(ALLOWED_TRANSITIONS[OrderStatus.DELIVERED].has(OrderStatus.REFUNDED)).toBe(true);
-        expect(ALLOWED_TRANSITIONS[OrderStatus.PAID].has(OrderStatus.REFUNDED)).toBe(false);
-        expect(ALLOWED_TRANSITIONS[OrderStatus.PROCESSING].has(OrderStatus.REFUNDED)).toBe(false);
-        expect(ALLOWED_TRANSITIONS[OrderStatus.SHIPPED].has(OrderStatus.REFUNDED)).toBe(false);
+        expect(ALLOWED_TRANSITIONS.DELIVERED.size).toBe(0);
     });
 });

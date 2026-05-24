@@ -5,7 +5,7 @@ export const VALID_STATUS_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[
     PAID: ["PROCESSING"],
     PROCESSING: ["SHIPPED"],
     SHIPPED: ["DELIVERED"],
-    DELIVERED: ["REFUNDED"],
+    DELIVERED: [],
     CANCELLED: [],
     FAILED: [],
     REFUNDED: [],

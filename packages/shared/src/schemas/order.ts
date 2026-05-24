@@ -33,7 +33,6 @@ export const orderStatusUpdateSchema = z.object({
         OrderStatus.DELIVERED,
         OrderStatus.CANCELLED,
         OrderStatus.FAILED,
-        OrderStatus.REFUNDED,
     ]),
 });
 export type OrderStatusUpdateInput = z.infer<typeof orderStatusUpdateSchema>;
@@ -67,6 +66,7 @@ export type OrderDTO = {
     shippingCountry: string;
     items: OrderItemDTO[];
     paidAt: string | null;
+    deliveredAt: string | null;
     createdAt: string;
     updatedAt: string;
 };

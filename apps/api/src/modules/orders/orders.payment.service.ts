@@ -57,6 +57,15 @@ export const ordersPaymentService = {
             );
         }
 
+        // Guard against duplicate refunds (e.g. webhook already processed
+        // the payment between our query and the Stripe call).
+        if (validPayment.status === PaymentStatus.REFUNDED) {
+            throw AppError.conflict(
+                "ALREADY_REFUNDED",
+                "This payment has already been refunded",
+            );
+        }
+
         // Call Stripe to create refund
         const refund = await stripe.refunds.create({
             payment_intent: validPayment.providerPaymentId,
@@ -166,7 +175,8 @@ export const ordersPaymentService = {
             if (!payment) return null;
 
             const order = payment.order;
-            // Only refund if currently in a held state (paid/processing/shipped/delivered)
+            // Only refund successful payments in a held state.
+            if (payment.status !== PaymentStatus.SUCCEEDED) return order;
             if (!STOCK_HELD.has(order.status as OrderStatus)) return order;
 
             const flipped = await tx.order.updateMany({

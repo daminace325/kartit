@@ -34,6 +34,12 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum RefundRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // ─── Models ────────────────────────────────────────────────────────────
 
 model User {
@@ -46,9 +52,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  cart      Cart?
-  orders    Order[]
-  addresses Address[]
+  cart           Cart?
+  orders         Order[]
+  addresses      Address[]
+  refundRequests RefundRequest[]
 }
 
 model Address {
@@ -169,12 +176,14 @@ model Order {
   shippingPostalCode String
   shippingCountry    String
 
-  items    OrderItem[]
-  payments Payment[]
+  items         OrderItem[]
+  payments      Payment[]
+  refundRequest RefundRequest?
 
-  paidAt    DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  paidAt      DateTime?
+  deliveredAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([userId])
   @@index([status])
@@ -230,6 +239,23 @@ model IdempotencyKey {
 
   @@unique([userId, key])
   @@index([expiresAt])
+}
+
+model RefundRequest {
+  id         String              @id @default(cuid())
+  orderId    String              @unique
+  order      Order               @relation(fields: [orderId], references: [id])
+  userId     String
+  user       User                @relation(fields: [userId], references: [id])
+  status     RefundRequestStatus @default(PENDING)
+  reason     String?
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@index([userId])
+  @@index([status])
 }
 
 model WebhookEvent {

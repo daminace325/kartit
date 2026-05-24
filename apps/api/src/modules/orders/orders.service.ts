@@ -15,6 +15,7 @@ import {
 } from "@repo/shared";
 import { AppError } from "../../lib/errors";
 import { env } from "../../config/env";
+import { getStripe } from "../../lib/stripe";
 
 type OrderWithItems = Prisma.OrderGetPayload<{
     include: { items: true };
@@ -82,6 +83,7 @@ export function toOrderDTO(order: OrderWithItems): OrderDTO {
         shippingCountry: order.shippingCountry,
         items: order.items.map(toItemDTO),
         paidAt: order.paidAt ? order.paidAt.toISOString() : null,
+        deliveredAt: order.deliveredAt ? order.deliveredAt.toISOString() : null,
         createdAt: order.createdAt.toISOString(),
         updatedAt: order.updatedAt.toISOString(),
     };
@@ -277,10 +279,26 @@ export const ordersService = {
         isAdmin: boolean,
         id: string,
     ): Promise<OrderDTO> {
+        const cancellableStatuses: OrderStatus[] = [
+            OrderStatus.PENDING,
+            OrderStatus.PAID,
+            OrderStatus.PROCESSING,
+        ];
+
         const updated = await prisma.$transaction(async (tx) => {
             const existing = await tx.order.findUnique({
                 where: { id },
-                include: ORDER_INCLUDE,
+                include: {
+                    ...ORDER_INCLUDE,
+                    payments: {
+                        where: {
+                            status: PaymentStatus.SUCCEEDED,
+                            providerPaymentId: { not: null },
+                        },
+                        orderBy: { createdAt: "desc" },
+                        take: 1,
+                    },
+                },
             });
             if (!existing) {
                 throw AppError.notFound("NOT_FOUND", "Order not found");
@@ -289,19 +307,23 @@ export const ordersService = {
                 throw AppError.forbidden();
             }
 
-            // Phase 1: customers can only cancel PENDING orders. PAID
-            // refund flow is sub-phase 1.8 (Stripe), driven by admin
-            // status transitions.
-            if (existing.status !== OrderStatus.PENDING) {
+            if (!cancellableStatuses.includes(existing.status)) {
+                if (existing.status === OrderStatus.SHIPPED) {
+                    throw AppError.conflict(
+                        "SHIPPED_CANNOT_CANCEL",
+                        "Shipped items cannot be cancelled. Please request a refund after delivery.",
+                    );
+                }
                 throw AppError.conflict(
                     ErrorCode.ORDER_INVALID_STATE,
                     `Order cannot be cancelled in status '${existing.status}'`,
                 );
             }
 
-            // Conditional update to guard against concurrent state changes.
+            // Mark CANCELLED first via conditional update — this prevents
+            // concurrent cancellations from issuing duplicate Stripe refunds.
             const result = await tx.order.updateMany({
-                where: { id, status: OrderStatus.PENDING },
+                where: { id, status: { in: cancellableStatuses } },
                 data: { status: OrderStatus.CANCELLED },
             });
             if (result.count !== 1) {
@@ -312,6 +334,24 @@ export const ordersService = {
             }
 
             await restoreInventory(tx, existing.items);
+
+            // For PAID/PROCESSING: refund via Stripe. If Stripe fails the
+            // transaction rolls back, reverting the order to its prior state.
+            if (existing.status !== OrderStatus.PENDING) {
+                const payment = existing.payments[0];
+                if (payment?.providerPaymentId) {
+                    const stripe = getStripe();
+                    await stripe.refunds.create({
+                        payment_intent: payment.providerPaymentId,
+                    });
+                    // Mark payment as refunded now. The charge.refunded webhook
+                    // won't match because CANCELLED is outside STOCK_HELD.
+                    await tx.payment.update({
+                        where: { id: payment.id },
+                        data: { status: PaymentStatus.REFUNDED },
+                    });
+                }
+            }
 
             return tx.order.findUniqueOrThrow({
                 where: { id },

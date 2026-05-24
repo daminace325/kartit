@@ -33,4 +33,4 @@ export const ORDER_TIMELINE: OrderStatus[] = [
     "SHIPPED",
     "DELIVERED",
 ];
-export const ORDER_CANCELLABLE: OrderStatus[] = ["PENDING"];
+export const ORDER_CANCELLABLE: readonly OrderStatus[] = ["PENDING", "PAID", "PROCESSING"];
