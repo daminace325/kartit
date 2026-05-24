@@ -48,13 +48,8 @@ export const ordersPaymentService = {
             );
         }
 
-        // Only allow refund from PAID, PROCESSING, SHIPPED, DELIVERED
-        const refundableStatuses: OrderStatus[] = [
-            OrderStatus.PAID,
-            OrderStatus.PROCESSING,
-            OrderStatus.SHIPPED,
-            OrderStatus.DELIVERED,
-        ];
+        // Only allow refund from DELIVERED
+        const refundableStatuses: OrderStatus[] = [OrderStatus.DELIVERED];
         if (!refundableStatuses.includes(order.status)) {
             throw AppError.badRequest(
                 "INVALID_STATUS",

@@ -2,9 +2,9 @@ import type { OrderStatus } from "./enums";
 
 export const VALID_STATUS_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
     PENDING: ["PAID", "CANCELLED", "FAILED"],
-    PAID: ["PROCESSING", "REFUNDED"],
-    PROCESSING: ["SHIPPED", "REFUNDED"],
-    SHIPPED: ["DELIVERED", "REFUNDED"],
+    PAID: ["PROCESSING"],
+    PROCESSING: ["SHIPPED"],
+    SHIPPED: ["DELIVERED"],
     DELIVERED: ["REFUNDED"],
     CANCELLED: [],
     FAILED: [],

@@ -21,10 +21,10 @@ describe("Order status transitions", () => {
         expect(allowed.has(OrderStatus.SHIPPED)).toBe(false);
     });
 
-    it("PAID allows PROCESSING, REFUNDED only", () => {
+    it("PAID allows PROCESSING only", () => {
         const allowed = ALLOWED_TRANSITIONS.PAID;
         expect(allowed.has(OrderStatus.PROCESSING)).toBe(true);
-        expect(allowed.has(OrderStatus.REFUNDED)).toBe(true);
+        expect(allowed.has(OrderStatus.REFUNDED)).toBe(false);
         expect(allowed.has(OrderStatus.CANCELLED)).toBe(false);
         expect(allowed.has(OrderStatus.SHIPPED)).toBe(false);
     });
@@ -41,20 +41,11 @@ describe("Order status transitions", () => {
         expect(ALLOWED_TRANSITIONS.REFUNDED.size).toBe(0);
     });
 
-    it("STOCK_HELD statuses include active fulfillment states", () => {
-        // STOCK_HELD is a private constant but we can verify stock-release
-        // expectations: PAID/processing/shipped/delivered should be
-        // refundable (stock released on refund).
-        const refundableFrom = [
-            OrderStatus.PAID,
-            OrderStatus.PROCESSING,
-            OrderStatus.SHIPPED,
-            OrderStatus.DELIVERED,
-        ];
-        for (const status of refundableFrom) {
-            expect(ALLOWED_TRANSITIONS[status].has(OrderStatus.REFUNDED)).toBe(
-                true,
-            );
-        }
+    it("only DELIVERED is refundable", () => {
+        // Only delivered orders can be refunded
+        expect(ALLOWED_TRANSITIONS[OrderStatus.DELIVERED].has(OrderStatus.REFUNDED)).toBe(true);
+        expect(ALLOWED_TRANSITIONS[OrderStatus.PAID].has(OrderStatus.REFUNDED)).toBe(false);
+        expect(ALLOWED_TRANSITIONS[OrderStatus.PROCESSING].has(OrderStatus.REFUNDED)).toBe(false);
+        expect(ALLOWED_TRANSITIONS[OrderStatus.SHIPPED].has(OrderStatus.REFUNDED)).toBe(false);
     });
 });
