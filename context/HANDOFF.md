@@ -186,7 +186,10 @@ ecomm/
         seed.ts                  ← admin user + categories + products w/ images
     shared/
       src/
-        index.ts                 ← barrel re-exporting everything below
+        index.ts                 ← barrel re-exporting everything below (including z)
+        lib/
+          zod.ts                 ← central patched zod — calls extendZodWithOpenApi(z) then re-exports z.
+                                   ALL schema files import from here, not from "zod" directly.
         money.ts                 ← formatMoney, minorToMajor, majorToMinor, parseMoney, decimalsFor
         enums.ts                 ← UserRole, OrderStatus, PaymentStatus (string unions)
         errorCodes.ts            ← ErrorCode const object (VALIDATION_FAILED, UNAUTHORIZED, etc.)
@@ -195,7 +198,7 @@ ecomm/
         cloudinary.ts            ← cloudinaryUrl(publicId, preset) render-time helper
         order-transitions.ts     ← VALID_STATUS_TRANSITIONS + getNextStatuses()
         schemas/
-          auth.ts                ← signup, signin, changePassword, profile, address
+          auth.ts                ← signup, signin, changePassword, profile, address (imports z from ../lib/zod)
           category.ts            ← categoryCreate, categoryUpdate, categoryListQuery
           product.ts             ← productCreate, productUpdate, listQuery, ProductDTO, ProductImageDTO (max 6)
           cart.ts                ← cartAddItem, cartUpdateItem, CartDTO, CartItemDTO, CartSummaryDTO
@@ -217,7 +220,7 @@ ecomm/
 ## Key gotchas / decisions
 
 - **Prisma 7:** `url` lives in `prisma.config.ts`, NOT `schema.prisma`. Runtime requires `PrismaPg` adapter (`@prisma/adapter-pg` + `pg`).
-- **Zod v4:** `ZodSchema` is deprecated → use `ZodType`.
+- **Zod v4:** `ZodSchema` is deprecated → use `ZodType`. Must call `extendZodWithOpenApi(z)` before creating schemas. Done once in `packages/shared/src/lib/zod.ts` — every schema file imports `z` from `../lib/zod`, NEVER from `"zod"` directly. New schemas must follow this pattern.
 - **Web cannot import from `apps/api`** — only from `@repo/shared`. `@repo/db` is server-only.
 - **Refresh tokens deferred to P2** — single JWT in httpOnly cookie, 7d expiry.
 - **Stripe webhook MUST be mounted BEFORE `express.json()`** in [app.ts](apps/api/src/app.ts) so signature verification sees the raw body. Router-local `express.raw()` parses it. The `/payments/intent` route in the same router supplies its own `express.json()` + `cookieParser()` since the global ones haven't run yet.
@@ -370,7 +373,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.22 | Test suite (unit + integration) | ✅ Done |
 | 1.23 | GitHub Actions CI | ✅ Done |
 | 1.24 | Multi-stage Dockerfiles | ✅ Done |
-| 1.25 | OpenAPI spec at /docs | ⬜ Not started |
+| 1.25 | OpenAPI spec at /docs | ✅ Done |
 | 1.26 | Sentry on API + web | ⬜ Not started |
 | 1.27 | README upgrade | ⬜ Not started |
 | 1.28 | Optimistic cart UI | ⬜ Not started |
@@ -571,9 +574,19 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - **`.dockerignore`:** Created at repo root (excludes `node_modules`, `dist`, `.next`, `.env*`, `.git`, tests, docs, etc.).
 - **`docker-compose.yml`:** Added `api` and `web` services under the `build` profile. Use: `docker compose --profile build up`. The `api` service depends on `postgres` (healthy); the `web` service depends on `api`.
 
-#### 1.25 — OpenAPI spec served at `/docs`
-- Use `@asteasolutions/zod-to-openapi` to generate from the existing `@repo/shared` schemas.
-- Mount Swagger UI at `/docs` (gate behind `env.isProd ? requireAdmin : noop`).
+#### 1.25 — OpenAPI spec at `/docs` ✅ DONE
+- **Dependencies:** `@asteasolutions/zod-to-openapi@^8.5` in both `apps/api` and `@repo/shared`; `swagger-ui-express@^5`, `@types/swagger-ui-express` (dev) in `apps/api`.
+- **Central patched zod:** `packages/shared/src/lib/zod.ts` calls `extendZodWithOpenApi(z)` before re-exporting `z`. All schema files in `@repo/shared` import `z` from `../lib/zod` (not from `"zod"`). This guarantees `.openapi()` is available on every schema instance regardless of module load order.
+- **`apps/api/src/lib/openapi.ts`:** Full OpenAPI 3.0.3 document generator using `OpenAPIRegistry` + `OpenApiGeneratorV3`. Imports `z` and all schemas from `@repo/shared` (not `zod` directly).
+  - All request schemas from `@repo/shared` registered as component schemas (SignupInput, ProductCreate, etc.).
+  - Response component schemas for UserResponse, ProductResponse, OrderResponse, CartResponse, AddressResponse, ErrorResponse, etc. registered as raw components.
+  - Cookie-based security scheme (`cookieAuth` → `kartit_auth`).
+  - All 40+ endpoints documented with method, path, summary, tags, request body/query, parameters (Idempotency-Key header on `/orders` and `/payments/intent`), response codes (200/201/204/400/401/403/404/409/429/503).
+  - Common response helpers (`ok`, `created`, `badRequest`, `unauthorized`, etc.) keep path definitions DRY.
+- **`apps/api/src/modules/docs/docs.routes.ts`:**
+  - `GET /docs.json` — raw OpenAPI JSON.
+  - `GET /docs` — Swagger UI (served by `swagger-ui-express`, branded "KartIt API Docs"). Gated behind `requireAdmin` in production, open in dev.
+- **`apps/api/src/app.ts`:** `docsRouter` mounted at `/docs`.
 
 #### 1.26 — Sentry on API + web
 - `@sentry/node` in `app.ts`; `@sentry/nextjs` in `web`. Tag `release` from git sha.
