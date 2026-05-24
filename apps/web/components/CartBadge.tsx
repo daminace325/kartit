@@ -1,32 +1,7 @@
-"use client";
-
 import Link from "next/link";
 import { ShoppingCart } from "lucide-react";
-import { useEffect, useState } from "react";
 
-type CartItem = { quantity: number };
-
-export default function CartBadge({ isAuthenticated }: { isAuthenticated: boolean }) {
-    const [rawCount, setRawCount] = useState(0);
-    const count = isAuthenticated ? rawCount : 0;
-
-    useEffect(() => {
-        if (!isAuthenticated) return;
-        let cancelled = false;
-        fetch("/api/cart", { credentials: "include" })
-            .then((r) => (r.ok ? r.json() : { cart: { items: [] as CartItem[] } }))
-            .then((data) => {
-                if (cancelled) return;
-                const items: CartItem[] = data?.cart?.items ?? [];
-                const total = items.reduce((sum, i) => sum + (i?.quantity ?? 0), 0);
-                setRawCount(total);
-            })
-            .catch(() => !cancelled && setRawCount(0));
-        return () => {
-            cancelled = true;
-        };
-    }, [isAuthenticated]);
-
+export default function CartBadge({ count }: { count: number }) {
     return (
         <Link
             href="/cart"

@@ -376,7 +376,7 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 | 1.25 | OpenAPI spec at /docs | ✅ Done |
 | 1.26 | Sentry on API + web | ⬜ Not started |
 | 1.27 | README upgrade | ✅ Done |
-| 1.28 | Optimistic cart UI | ⬜ Not started |
+| 1.28 | Optimistic cart UI | ✅ Done |
 | 1.29 | SEO basics | ⬜ Not started |
 
 ### Tier S — correctness & money-safety (do these first, in order)
@@ -595,8 +595,12 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - **Created** [README.md](README.md) with architecture diagram (mermaid), tech stack table, "Run locally in 60s" guide, Stripe test cards table + webhook CLI instructions, full API overview, project structure, available scripts, testing guide, and deployment checklist.
 - **Skipped:** live demo link + screenshots (explicitly excluded).
 
-#### 1.28 — Optimistic cart UI
-- `useOptimistic` in [CartItemControls.tsx](apps/web/components/CartItemControls.tsx) for +/- — instant feedback, settle on response, roll back on error.
+#### 1.28 — Optimistic cart UI ✅ DONE
+- **Component:** [CartItemControls.tsx](apps/web/components/CartItemControls.tsx) — uses React 19 `useOptimistic` hook; quantity display updates instantly on +/- click before the API call completes.
+  - `addOptimistic(newQty)` called synchronously (outside `startTransition`) for immediate render.
+  - API call fires after; on success, `router.refresh()` wrapped in `startTransition` syncs with server. On failure, React auto-reverts `optimisticQty` to the server `qty` prop since it never changed.
+  - Button disabled state and display both driven by `optimisticQty` (not the prop `qty`), so UI never lags behind rapid clicks.
+- **CartBadge fix:** [CartBadge.tsx](apps/web/components/CartBadge.tsx) simplified to accept `count` prop instead of fetching in `useEffect`. [Navbar.tsx](apps/web/components/Navbar.tsx) now fetches cart count server-side and passes it down. `router.refresh()` re-renders the Navbar (server component), so the badge updates immediately after any cart mutation.
 
 #### 1.29 — SEO basics
 - `app/sitemap.ts`, `app/robots.ts`, OG metadata on product detail pages.

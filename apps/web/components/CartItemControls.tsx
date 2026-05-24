@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useOptimistic, useTransition } from "react";
 import { Trash2, Loader2 } from "lucide-react";
 import { useApiMutation } from "@/hooks/useApiMutation";
 
@@ -16,8 +16,17 @@ export default function CartItemControls({ productId, qty, stock }: Props) {
     const [pending, startTransition] = useTransition();
     const { execute, loading, error, clearError } = useApiMutation();
 
+    const [optimisticQty, addOptimistic] = useOptimistic(
+        qty,
+        (_current: number, next: number) => next,
+    );
+
     async function updateQty(newQty: number) {
-        if (newQty === qty) return;
+        if (newQty === optimisticQty) return;
+        clearError();
+
+        addOptimistic(newQty);
+
         const result = await execute(
             `/cart/items/${encodeURIComponent(productId)}`,
             {
@@ -27,19 +36,24 @@ export default function CartItemControls({ productId, qty, stock }: Props) {
             },
             "Failed to update",
         );
-        if (!result.ok) return;
-        startTransition(() => router.refresh());
+
+        if (result.ok) {
+            startTransition(() => {
+                router.refresh();
+            });
+        }
     }
 
     async function remove() {
         if (!confirm("Remove this item from your cart?")) return;
+        clearError();
+
         const result = await execute(
             `/cart/items/${encodeURIComponent(productId)}`,
             { method: "DELETE" },
             "Failed to remove",
         );
-        if (!result.ok) return;
-        startTransition(() => router.refresh());
+        if (result.ok) startTransition(() => router.refresh());
     }
 
     const disabled = loading || pending;
@@ -49,19 +63,23 @@ export default function CartItemControls({ productId, qty, stock }: Props) {
             <div className="flex items-center overflow-hidden rounded-md border border-slate-700">
                 <button
                     type="button"
-                    onClick={() => updateQty(qty - 1)}
-                    disabled={disabled || qty <= 1}
+                    onClick={() => updateQty(optimisticQty - 1)}
+                    disabled={disabled || optimisticQty <= 1}
                     className="bg-slate-900 px-3 py-1.5 text-slate-200 hover:bg-slate-800 disabled:opacity-40"
                 >
                     −
                 </button>
                 <span className="min-w-10 border-x border-slate-700 bg-slate-800 px-3 py-1.5 text-center text-sm text-white">
-                    {disabled ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : qty}
+                    {disabled ? (
+                        <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                    ) : (
+                        optimisticQty
+                    )}
                 </span>
                 <button
                     type="button"
-                    onClick={() => updateQty(qty + 1)}
-                    disabled={disabled || qty >= stock}
+                    onClick={() => updateQty(optimisticQty + 1)}
+                    disabled={disabled || optimisticQty >= stock}
                     className="bg-slate-900 px-3 py-1.5 text-slate-200 hover:bg-slate-800 disabled:opacity-40"
                 >
                     +

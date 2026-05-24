@@ -2,6 +2,7 @@
 import { Search, User } from "lucide-react";
 import { api } from "@/services/apiClient";
 import { getCurrentUser } from "@/lib/auth";
+import type { CartDTO } from "@repo/shared";
 import CartBadge from "./CartBadge";
 
 type Category = { id: string; slug: string; name: string };
@@ -13,6 +14,17 @@ export default async function Navbar() {
             .catch(() => ({ categories: [] as Category[] })),
         getCurrentUser(),
     ]);
+
+    let cartCount = 0;
+    if (user) {
+        try {
+            const { cart } = await api.get<{ cart: CartDTO }>("/cart");
+            cartCount = cart.itemCount ?? 0;
+        } catch {
+            cartCount = 0;
+        }
+    }
+
     const topCategories = categories.slice(0, 10);
 
     return (
@@ -40,7 +52,7 @@ export default async function Navbar() {
                     </div>
                 </form>
 
-                <CartBadge isAuthenticated={!!user} />
+                <CartBadge count={cartCount} />
 
                 <Link
                     href={user ? "/account" : "/signin"}
