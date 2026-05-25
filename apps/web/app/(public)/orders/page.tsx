@@ -85,7 +85,7 @@ export default async function OrdersPage({
                                                 {itemCount} {itemCount === 1 ? "item" : "items"}
                                             </div>
                                             <div className="mt-1 truncate font-mono text-xs text-slate-500">
-                                                #{order.id}
+                                                #{order.orderNumber}
                                             </div>
                                         </div>
                                         <div className="text-right">

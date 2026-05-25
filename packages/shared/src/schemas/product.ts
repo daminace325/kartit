@@ -17,6 +17,7 @@ export const productImageInputSchema = z.object({
 
 export const productCreateSchema = z.object({
     slug,
+    sku: z.string().min(1).max(50),
     name: z.string().min(1).max(120),
     description: z.string().min(1).max(4000),
     // Money: minor units as integer
@@ -56,6 +57,7 @@ export type ProductImageDTO = {
 export type ProductDTO = {
     id: string;
     slug: string;
+    sku: string;
     name: string;
     description: string;
     priceMinor: string;

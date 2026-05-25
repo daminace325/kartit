@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { prisma } from "@repo/db";
 import type { Prisma } from "@repo/db";
 import {
@@ -16,6 +17,15 @@ import {
 import { AppError } from "../../lib/errors";
 import { env } from "../../config/env";
 import { getStripe } from "../../lib/stripe";
+
+function generateOrderNumber(): string {
+    const today = new Date();
+    const y = today.getFullYear().toString();
+    const m = (today.getMonth() + 1).toString().padStart(2, "0");
+    const d = today.getDate().toString().padStart(2, "0");
+    const suffix = crypto.randomBytes(3).toString("hex").toUpperCase();
+    return `ECM-${y}${m}${d}-${suffix}`;
+}
 
 type OrderWithItems = Prisma.OrderGetPayload<{
     include: { items: true };
@@ -68,6 +78,7 @@ export function toItemDTO(item: OrderWithItems["items"][number]): OrderItemDTO {
 export function toOrderDTO(order: OrderWithItems): OrderDTO {
     return {
         id: order.id,
+        orderNumber: order.orderNumber,
         userId: order.userId,
         status: order.status as OrderStatus,
         subtotalMinor: order.subtotalMinor.toString(),
@@ -172,6 +183,7 @@ export const ordersService = {
         }
 
         const cartId = cart.id;
+        const orderNumber = generateOrderNumber();
         const itemsSnapshot = cart.items.map((it) => ({
             productId: it.productId,
             productName: it.product.name,
@@ -203,6 +215,7 @@ export const ordersService = {
 
             const created = await tx.order.create({
                 data: {
+                    orderNumber,
                     userId,
                     status: OrderStatus.PENDING,
                     subtotalMinor: pricing.subtotal,

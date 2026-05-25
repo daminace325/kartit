@@ -121,7 +121,7 @@ export default async function AdminOrderDetailPage({
                         <span>Placed {formatDateTime(order.createdAt)}</span>
                         <span>· Updated {formatDateTime(order.updatedAt)}</span>
                     </div>
-                    <div className="mt-1 font-mono text-xs text-slate-500">#{order.id}</div>
+                    <div className="mt-1 font-mono text-xs text-slate-500">#{order.orderNumber}</div>
                 </div>
             </div>
 

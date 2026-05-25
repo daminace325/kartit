@@ -104,7 +104,7 @@ export default async function OrderDetailPage({
                         <span>Placed {formatDateTime(order.createdAt)}</span>
                         {order.paidAt && <span>· Paid {formatDateTime(order.paidAt)}</span>}
                     </div>
-                    <div className="mt-1 font-mono text-xs text-slate-500">#{order.id}</div>
+                    <div className="mt-1 font-mono text-xs text-slate-500">#{order.orderNumber}</div>
                 </div>
                 {canCancel && <CancelOrderButton orderId={order.id} />}
                 {showRefundButton && <RequestRefundButton orderId={order.id} />}

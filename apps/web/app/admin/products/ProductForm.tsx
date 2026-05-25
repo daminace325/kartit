@@ -23,6 +23,7 @@ type Props = {
         ProductDTO,
         | "id"
         | "slug"
+        | "sku"
         | "name"
         | "description"
         | "priceMinor"
@@ -43,6 +44,7 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
 
     const [name, setName] = useState(initial?.name ?? "");
     const [slug, setSlug] = useState(initial?.slug ?? "");
+    const [sku, setSku] = useState(initial?.sku ?? "");
     const [slugTouched, setSlugTouched] = useState(Boolean(initial?.slug));
     const [description, setDescription] = useState(initial?.description ?? "");
     const [price, setPrice] = useState<string>(
@@ -143,6 +145,7 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
                 method,
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    sku: sku.trim(),
                     name: name.trim(),
                     slug: slug.trim(),
                     description: description.trim(),
@@ -195,6 +198,20 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
                 />
                 <p className="mt-1 text-xs text-slate-400">
                     URL-friendly identifier. Used at /p/&lt;slug&gt;.
+                </p>
+            </div>
+
+            <div>
+                <label className="mb-1 block text-sm font-medium text-slate-200">SKU</label>
+                <input
+                    type="text"
+                    required
+                    value={sku}
+                    onChange={(e) => setSku(e.target.value)}
+                    className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-white outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                />
+                <p className="mt-1 text-xs text-slate-400">
+                    Stock keeping unit. Unique inventory identifier.
                 </p>
             </div>
 

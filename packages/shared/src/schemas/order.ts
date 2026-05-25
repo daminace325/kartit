@@ -51,6 +51,7 @@ export type OrderItemDTO = {
 
 export type OrderDTO = {
     id: string;
+    orderNumber: string;
     userId: string;
     status: OrderStatus;
     subtotalMinor: string;

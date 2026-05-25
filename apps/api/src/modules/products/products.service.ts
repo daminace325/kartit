@@ -28,6 +28,7 @@ function toProductDTO(p: ProductWithImages): ProductDTO {
     return {
         id: p.id,
         slug: p.slug,
+        sku: p.sku,
         name: p.name,
         description: p.description,
         priceMinor: p.priceMinor.toString(),

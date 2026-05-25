@@ -56,7 +56,7 @@ export default async function AdminOrdersPage({
                                     <tr key={order.id} className="hover:bg-slate-800/40">
                                         <td className="px-4 py-3">
                                             <div className="font-mono text-xs text-slate-300">
-                                                #{order.id.slice(0, 10)}…
+                                                #{order.orderNumber}
                                             </div>
                                         </td>
                                         <td className="px-4 py-3 font-mono text-[10px] text-slate-500">

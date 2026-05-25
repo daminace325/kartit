@@ -40,6 +40,7 @@ export default async function AdminProductsPage() {
                         <thead className="border-b border-slate-800 bg-slate-900/50 text-left text-xs uppercase tracking-wide text-slate-400">
                             <tr>
                                 <th className="px-4 py-3 font-medium">Product</th>
+                                <th className="px-4 py-3 font-medium">SKU</th>
                                 <th className="px-4 py-3 font-medium">Slug</th>
                                 <th className="px-4 py-3 font-medium">Price</th>
                                 <th className="px-4 py-3 font-medium">Stock</th>
@@ -68,6 +69,9 @@ export default async function AdminProductsPage() {
                                                     {p.name}
                                                 </span>
                                             </div>
+                                        </td>
+                                        <td className="px-4 py-3 font-mono text-xs text-slate-300">
+                                            {p.sku}
                                         </td>
                                         <td className="px-4 py-3 text-slate-300">
                                             <code className="rounded bg-slate-800 px-1.5 py-0.5 text-xs">
