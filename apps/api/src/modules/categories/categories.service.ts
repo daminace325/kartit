@@ -30,7 +30,7 @@ async function assertValidParent(parentId: string, selfId?: string) {
         );
     }
     const parent = await prisma.category.findUnique({
-        where: { id: parentId },
+        where: { id: parentId, deletedAt: null },
         select: { id: true, parentId: true },
     });
     if (!parent) {
@@ -46,7 +46,7 @@ async function assertValidParent(parentId: string, selfId?: string) {
         // If selfId already has children, it cannot become a child
         // (would push the existing children to depth 3).
         const childCount = await prisma.category.count({
-            where: { parentId: selfId },
+            where: { parentId: selfId, deletedAt: null },
         });
         if (childCount > 0) {
             throw AppError.badRequest(
@@ -61,10 +61,10 @@ export const categoriesService = {
     async list(query: CategoryListQuery = {}) {
         const where =
             query.parentId === undefined
-                ? {}
+                ? { deletedAt: null }
                 : query.parentId === "" || query.parentId === "null"
-                    ? { parentId: null }
-                    : { parentId: query.parentId };
+                    ? { parentId: null, deletedAt: null }
+                    : { parentId: query.parentId, deletedAt: null };
 
         return prisma.category.findMany({
             where,
@@ -75,7 +75,7 @@ export const categoriesService = {
 
     async getById(id: string) {
         const category = await prisma.category.findUnique({
-            where: { id },
+            where: { id, deletedAt: null },
             select: SELECT,
         });
         if (!category) throw AppError.notFound("NOT_FOUND", "Category not found");
@@ -84,7 +84,7 @@ export const categoriesService = {
 
     async getBySlug(slug: string) {
         const category = await prisma.category.findUnique({
-            where: { slug },
+            where: { slug, deletedAt: null },
             select: SELECT,
         });
         if (!category) throw AppError.notFound("NOT_FOUND", "Category not found");
@@ -93,7 +93,7 @@ export const categoriesService = {
 
     async create(input: CategoryCreateInput) {
         const existing = await prisma.category.findUnique({
-            where: { slug: input.slug },
+            where: { slug: input.slug, deletedAt: null },
             select: { id: true },
         });
         if (existing) {
@@ -118,14 +118,14 @@ export const categoriesService = {
 
     async update(id: string, input: CategoryUpdateInput) {
         const current = await prisma.category.findUnique({
-            where: { id },
+            where: { id, deletedAt: null },
             select: { id: true, parentId: true },
         });
         if (!current) throw AppError.notFound("NOT_FOUND", "Category not found");
 
         if (input.slug) {
             const clash = await prisma.category.findFirst({
-                where: { slug: input.slug, NOT: { id } },
+                where: { slug: input.slug, NOT: { id }, deletedAt: null },
                 select: { id: true },
             });
             if (clash) {
@@ -151,33 +151,34 @@ export const categoriesService = {
     },
 
     async remove(id: string) {
-        const [productCount, childCount] = await Promise.all([
-            prisma.product.count({ where: { categoryId: id } }),
-            prisma.category.count({ where: { parentId: id } }),
-        ]);
-        if (productCount > 0 || childCount > 0) {
-            const parts: string[] = [];
-            if (childCount > 0) {
-                parts.push(
-                    `${childCount} subcategor${childCount === 1 ? "y" : "ies"}`,
-                );
+        await prisma.$transaction(async (tx) => {
+            // Collect subcategory ids (only 2-level nesting is enforced, so a
+            // single-level fetch is sufficient).
+            const children = await tx.category.findMany({
+                where: { parentId: id, deletedAt: null },
+                select: { id: true },
+            });
+            const categoryIds = [id, ...children.map((c) => c.id)];
+
+            // Soft-delete products belonging to this category or its children.
+            await tx.product.updateMany({
+                where: { categoryId: { in: categoryIds }, deletedAt: null },
+                data: { deletedAt: new Date(), isActive: false },
+            });
+
+            // Soft-delete child categories.
+            if (children.length > 0) {
+                await tx.category.updateMany({
+                    where: { id: { in: children.map((c) => c.id) } },
+                    data: { deletedAt: new Date() },
+                });
             }
-            if (productCount > 0) {
-                parts.push(
-                    `${productCount} product${productCount === 1 ? "" : "s"}`,
-                );
-            }
-            throw AppError.conflict(
-                childCount > 0 ? "CATEGORY_HAS_CHILDREN" : "CATEGORY_HAS_PRODUCTS",
-                `Cannot delete: category still has ${parts.join(
-                    " and ",
-                )}. Reassign or delete them first.`,
-            );
-        }
-        try {
-            await prisma.category.delete({ where: { id } });
-        } catch {
-            throw AppError.notFound("NOT_FOUND", "Category not found");
-        }
+
+            // Soft-delete the category itself.
+            await tx.category.update({
+                where: { id },
+                data: { deletedAt: new Date() },
+            });
+        });
     },
 };

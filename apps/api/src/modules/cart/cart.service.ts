@@ -88,7 +88,7 @@ export const cartService = {
         quantity: number,
     ): Promise<CartDTO> {
         const product = await prisma.product.findUnique({
-            where: { id: productId },
+            where: { id: productId, deletedAt: null },
             select: { id: true, isActive: true, stock: true },
         });
         if (!product) throw AppError.notFound("NOT_FOUND", "Product not found");
@@ -144,7 +144,7 @@ export const cartService = {
             await prisma.cartItem.delete({ where: { id: existing.id } });
         } else {
             const product = await prisma.product.findUnique({
-                where: { id: productId },
+                where: { id: productId, deletedAt: null },
                 select: { stock: true, isActive: true },
             });
             if (!product || !product.isActive) {
@@ -202,7 +202,7 @@ export const cartService = {
 
         // Stock revalidation (in case stock dropped after items were added).
         for (const item of cart.items) {
-            if (!item.product.isActive) {
+            if (!item.product.isActive || item.product.deletedAt) {
                 throw AppError.conflict(
                     "PRODUCT_INACTIVE",
                     `Product "${item.product.name}" is no longer available`,

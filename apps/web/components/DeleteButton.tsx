@@ -15,7 +15,7 @@ export default function DeleteButton({ entityType, id, name }: Props) {
     const { execute, loading, error, setError, clearError } = useApiMutation();
 
     async function handleClick() {
-        if (!confirm(`Delete ${entityType} "${name}"? This cannot be undone.`)) return;
+        if (!confirm(`Delete ${entityType} "${name}"?`)) return;
         const result = await execute(
             `/${entityType === "category" ? "categories" : "products"}/${id}`,
             { method: "DELETE" },

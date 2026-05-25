@@ -7,22 +7,12 @@ import type {
     ProductListQuery,
     ProductUpdateInput,
 } from "@repo/shared";
-import { OrderStatus } from "@repo/shared";
 import { destroyByPublicIds } from "../../lib/cloudinary";
 import { AppError } from "../../lib/errors";
 
 type ProductWithImages = Prisma.ProductGetPayload<{
     include: { images: true };
 }>;
-
-// Order statuses where the product is still "in flight" — block delete.
-const IN_FLIGHT: OrderStatus[] = [
-    OrderStatus.PENDING,
-    OrderStatus.PAID,
-    OrderStatus.PROCESSING,
-    OrderStatus.SHIPPED,
-    OrderStatus.DELIVERED,
-];
 
 function toImageDTO(img: ProductWithImages["images"][number]): ProductImageDTO {
     return {
@@ -71,6 +61,7 @@ export const productsService = {
 
         const where: Prisma.ProductWhereInput = {
             isActive: true,
+            deletedAt: null,
             ...categoryFilter,
             ...(q
                 ? {
@@ -100,7 +91,7 @@ export const productsService = {
 
     async getById(id: string) {
         const product = await prisma.product.findUnique({
-            where: { id, isActive: true },
+            where: { id, isActive: true, deletedAt: null },
             include: { images: true },
         });
         if (!product) throw AppError.notFound("NOT_FOUND", "Product not found");
@@ -109,7 +100,7 @@ export const productsService = {
 
     async getBySlug(slug: string) {
         const product = await prisma.product.findUnique({
-            where: { slug },
+            where: { slug, deletedAt: null },
             include: { images: true },
         });
         if (!product || !product.isActive) {
@@ -121,7 +112,7 @@ export const productsService = {
     async create(input: ProductCreateInput) {
         // slug uniqueness
         const slugClash = await prisma.product.findUnique({
-            where: { slug: input.slug },
+            where: { slug: input.slug, deletedAt: null },
             select: { id: true },
         });
         if (slugClash) {
@@ -133,7 +124,7 @@ export const productsService = {
 
         // category must exist
         const categoryExists = await prisma.category.findUnique({
-            where: { id: input.categoryId },
+            where: { id: input.categoryId, deletedAt: null },
             select: { id: true },
         });
         if (!categoryExists) {
@@ -163,14 +154,14 @@ export const productsService = {
 
     async update(id: string, input: ProductUpdateInput) {
         const existing = await prisma.product.findUnique({
-            where: { id },
+            where: { id, deletedAt: null },
             include: { images: true },
         });
         if (!existing) throw AppError.notFound("NOT_FOUND", "Product not found");
 
         if (input.slug && input.slug !== existing.slug) {
             const clash = await prisma.product.findFirst({
-                where: { slug: input.slug, NOT: { id } },
+                where: { slug: input.slug, NOT: { id }, deletedAt: null },
                 select: { id: true },
             });
             if (clash) {
@@ -183,7 +174,7 @@ export const productsService = {
 
         if (input.categoryId && input.categoryId !== existing.categoryId) {
             const categoryExists = await prisma.category.findUnique({
-                where: { id: input.categoryId },
+                where: { id: input.categoryId, deletedAt: null },
                 select: { id: true },
             });
             if (!categoryExists) {
@@ -240,32 +231,14 @@ export const productsService = {
 
     async remove(id: string) {
         const product = await prisma.product.findUnique({
-            where: { id },
-            include: { images: true },
+            where: { id, deletedAt: null },
+            select: { id: true },
         });
         if (!product) throw AppError.notFound("NOT_FOUND", "Product not found");
 
-        // Block delete if any in-flight order references this product.
-        const inFlight = await prisma.orderItem.count({
-            where: {
-                productId: id,
-                order: { status: { in: IN_FLIGHT } },
-            },
+        await prisma.product.update({
+            where: { id },
+            data: { deletedAt: new Date(), isActive: false },
         });
-        if (inFlight > 0) {
-            throw AppError.conflict(
-                "PRODUCT_IN_ACTIVE_ORDERS",
-                `Cannot delete: this product is part of ${inFlight} active order${
-                    inFlight === 1 ? "" : "s"
-                }. Cancel or complete ${inFlight === 1 ? "it" : "them"} first.`,
-            );
-        }
-
-        const publicIds = product.images.map((img) => img.publicId);
-        await prisma.product.delete({ where: { id } });
-
-        if (publicIds.length > 0) {
-            destroyByPublicIds(publicIds).catch(() => {});
-        }
     },
 };

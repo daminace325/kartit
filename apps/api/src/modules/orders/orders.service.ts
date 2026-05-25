@@ -140,7 +140,7 @@ export const ordersService = {
 
         // Re-validate active + stock with current product rows (mirror /cart/summary).
         for (const item of cart.items) {
-            if (!item.product.isActive) {
+            if (!item.product.isActive || item.product.deletedAt) {
                 throw AppError.conflict(
                     "PRODUCT_INACTIVE",
                     `Product "${item.product.name}" is no longer available`,
@@ -190,7 +190,7 @@ export const ordersService = {
             // surrounding transaction rolls back any earlier decrements.
             for (const it of itemsSnapshot) {
                 const result = await tx.product.updateMany({
-                    where: { id: it.productId, stock: { gte: it.quantity } },
+                    where: { id: it.productId, deletedAt: null, stock: { gte: it.quantity } },
                     data: { stock: { decrement: it.quantity } },
                 });
                 if (result.count !== 1) {
