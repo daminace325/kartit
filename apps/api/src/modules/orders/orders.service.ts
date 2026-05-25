@@ -56,6 +56,8 @@ export function toItemDTO(item: OrderWithItems["items"][number]): OrderItemDTO {
         id: item.id,
         productId: item.productId,
         productName: item.productName,
+        productSlug: item.productSlug,
+        imageUrl: item.imageUrl,
         unitPriceMinor: item.unitPriceMinor.toString(),
         currency: item.currency,
         quantity: item.quantity,
@@ -117,7 +119,16 @@ export const ordersService = {
             where: { userId },
             include: {
                 items: {
-                    include: { product: true },
+                    include: {
+                        product: {
+                            include: {
+                                images: {
+                                    orderBy: { position: "asc" },
+                                    take: 1,
+                                },
+                            },
+                        },
+                    },
                     orderBy: { createdAt: "asc" },
                 },
             },
@@ -164,6 +175,8 @@ export const ordersService = {
         const itemsSnapshot = cart.items.map((it) => ({
             productId: it.productId,
             productName: it.product.name,
+            productSlug: it.product.slug,
+            imageUrl: it.product.images[0]?.url ?? null,
             unitPriceMinor: it.product.priceMinor,
             currency: it.product.currency,
             quantity: it.quantity,
@@ -209,6 +222,8 @@ export const ordersService = {
                         create: itemsSnapshot.map((it) => ({
                             productId: it.productId,
                             productName: it.productName,
+                            productSlug: it.productSlug,
+                            imageUrl: it.imageUrl,
                             unitPriceMinor: it.unitPriceMinor,
                             currency: it.currency,
                             quantity: it.quantity,

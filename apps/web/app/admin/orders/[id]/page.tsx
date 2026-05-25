@@ -132,11 +132,23 @@ export default async function AdminOrderDetailPage({
                         <div className="mt-4 divide-y divide-slate-800 rounded-lg border border-slate-800 bg-slate-900">
                             {order.items.map((item) => (
                                 <div key={item.id} className="flex gap-4 p-4">
+                                    {item.imageUrl && (
+                                        <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-slate-800">
+                                            <img
+                                                src={item.imageUrl}
+                                                alt={item.productName}
+                                                className="h-full w-full object-cover"
+                                            />
+                                        </div>
+                                    )}
                                     <div className="flex flex-1 items-center justify-between gap-4">
                                         <div className="min-w-0">
-                                            <div className="truncate text-sm font-medium text-white">
+                                            <Link
+                                                href={`/products/${encodeURIComponent(item.productSlug)}`}
+                                                className="truncate text-sm font-medium text-white hover:text-sky-400"
+                                            >
                                                 {item.productName}
-                                            </div>
+                                            </Link>
                                             <div className="text-xs text-slate-400">
                                                 Qty {item.quantity} ·{" "}
                                                 {formatMoney(

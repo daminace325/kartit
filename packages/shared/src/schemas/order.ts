@@ -41,6 +41,8 @@ export type OrderItemDTO = {
     id: string;
     productId: string;
     productName: string;
+    productSlug: string;
+    imageUrl: string | null;
     unitPriceMinor: string;
     currency: string;
     quantity: number;

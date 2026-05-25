@@ -197,6 +197,8 @@ model OrderItem {
   product        Product @relation(fields: [productId], references: [id])
   // Snapshot fields so future product changes don't alter past orders
   productName    String
+  productSlug    String
+  imageUrl       String?
   unitPriceMinor BigInt
   currency       String  @db.Char(3)
   quantity       Int
