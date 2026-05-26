@@ -18,5 +18,5 @@ promotionsRouter.post("/", requireAdmin, validate(promotionCreateSchema), create
 promotionsRouter.patch("/:id", requireAdmin, validate(promotionUpdateSchema), updatePromotion);
 
 // Read endpoints accessible by any authenticated user.
-promotionsRouter.get("/", listPromotions);
-promotionsRouter.get("/:id", getPromotion);
+promotionsRouter.get("/", requireAdmin, listPromotions);
+promotionsRouter.get("/:id", requireAdmin, getPromotion);
