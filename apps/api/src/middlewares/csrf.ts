@@ -4,29 +4,42 @@ import { AppError } from "../lib/errors";
 /**
  * CSRF protection for state-changing requests.
  * Requires the `X-Requested-With: fetch` header on all mutating requests
- * (POST, PUT, PATCH, DELETE). This header is automatically set by the
- * browser when using fetch(), but not by cross-site form submissions.
- *
- * Webhook endpoints are excluded via middleware ordering in app.ts (the
- * payments router is mounted before this middleware), not by path check here.
+ * (POST, PUT, PATCH, DELETE). This header must be explicitly set by
+ * application code — it is not set automatically by browsers.
  */
-export const csrfMiddleware: RequestHandler = (req, res, next) => {
-    // Skip for safe methods (GET, HEAD, OPTIONS) - these don't modify state.
-    const method = req.method.toUpperCase();
-    if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
-        return next();
-    }
+export function csrfMiddleware({ skipPaths = [] }: { skipPaths?: string[] } = {}): RequestHandler {
+    // Normalize skip paths: strip trailing slashes and ensure leading slash.
+    const skipSet = new Set(
+        skipPaths.map((p) => {
+            const normalized = p.endsWith("/") ? p.slice(0, -1) : p;
+            return normalized.startsWith("/") ? normalized : `/${normalized}`;
+        }),
+    );
 
-    // Require the CSRF header on state-changing requests.
-    const csrfHeader = req.headers["x-requested-with"];
-    if (csrfHeader !== "fetch") {
-        return next(
-            AppError.forbidden(
-                "CSRF_INVALID",
-                "Missing required security header. Ensure requests are made from the application.",
-            ),
-        );
-    }
+    return (req, res, next) => {
+        // Always allow GET, HEAD, OPTIONS.
+        const method = req.method.toUpperCase();
+        if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+            return next();
+        }
 
-    next();
-};
+        // Skip configured paths (e.g. webhook endpoints that receive
+        // server-to-server requests without a browser origin).
+        const reqPath = req.path.endsWith("/") ? req.path.slice(0, -1) : req.path;
+        if (skipSet.has(reqPath)) {
+            return next();
+        }
+
+        const csrfHeader = req.headers["x-requested-with"];
+        if (csrfHeader !== "fetch") {
+            return next(
+                AppError.forbidden(
+                    "CSRF_INVALID",
+                    "Missing required security header. Ensure requests are made from the application.",
+                ),
+            );
+        }
+
+        next();
+    };
+}

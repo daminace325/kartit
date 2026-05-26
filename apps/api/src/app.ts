@@ -68,17 +68,19 @@ export function createApp() {
     });
     app.use("/payments/intent", paymentIntentLimiter);
 
+    // CSRF protection for state-changing requests.
+    // /payments/webhook is excluded because Stripe sends server-to-server
+    // requests without a browser origin or the X-Requested-With header.
+    // Mounted before express.json() — CSRF only inspects headers.
+    app.use(csrfMiddleware({ skipPaths: ["/payments/webhook"] }));
+
     // Stripe webhook MUST see the raw request body for signature verification.
-    // Mount it BEFORE express.json() so the global JSON parser doesn't consume
+    // Mounted BEFORE express.json() so the global JSON parser doesn't consume
     // the body. The router-local express.raw() in payments.routes.ts handles parsing.
     app.use("/payments", paymentsRouter);
 
     app.use(express.json());
     app.use(cookieParser());
-
-    // CSRF protection for state-changing requests.
-    // Excludes /payments (webhooks handled before this middleware).
-    app.use(csrfMiddleware);
 
     // Throttle credential endpoints to slow down brute-force / stuffing.
     const authLimiter = rateLimit({
