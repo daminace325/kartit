@@ -40,6 +40,11 @@ enum RefundRequestStatus {
   REJECTED
 }
 
+enum PromotionType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
 // ─── Models ────────────────────────────────────────────────────────────
 
 model User {
@@ -288,7 +293,7 @@ model WebhookEvent {
 model Promotion {
   id               String    @id @default(cuid())
   code             String    @unique @db.Citext
-  type             String    // PERCENTAGE | FIXED_AMOUNT
+  type             PromotionType
   value            BigInt    // basis points for % (1000 = 10.00%), minor units for fixed
   minSubtotalMinor BigInt?   // minimum subtotal required to qualify
   maxUses          Int?      // total usage limit, null = unlimited

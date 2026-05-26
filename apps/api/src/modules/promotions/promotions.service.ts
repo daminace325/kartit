@@ -15,7 +15,7 @@ function toDTO(promo: any): PromotionDTO {
     return {
         id: promo.id,
         code: promo.code,
-        type: promo.type as PromotionType,
+        type: promo.type,
         value: promo.value.toString(),
         minSubtotalMinor: promo.minSubtotalMinor?.toString() ?? null,
         maxUses: promo.maxUses,
@@ -170,7 +170,7 @@ export const promotionsService = {
         return {
             id: promo.id,
             code: promo.code,
-            type: promo.type as PromotionType,
+            type: promo.type,
             discountMinor: discountMinor > 0n ? discountMinor : 0n,
         };
     },
