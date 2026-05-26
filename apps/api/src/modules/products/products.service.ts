@@ -249,9 +249,27 @@ export const productsService = {
     async remove(id: string) {
         const product = await prisma.product.findUnique({
             where: { id, deletedAt: null },
-            select: { id: true },
+            select: { id: true, name: true },
         });
         if (!product) throw AppError.notFound("NOT_FOUND", "Product not found");
+
+        const activeCartCount = await prisma.cartItem.count({
+            where: { productId: id },
+        });
+        const activeOrderCount = await prisma.orderItem.count({
+            where: {
+                productId: id,
+                order: {
+                    status: { notIn: ["DELIVERED", "CANCELLED", "FAILED", "REFUNDED"] },
+                },
+            },
+        });
+        if (activeCartCount > 0 || activeOrderCount > 0) {
+            throw AppError.conflict(
+                "PRODUCT_HAS_REFERENCES",
+                `"${product.name}" is referenced by ${activeCartCount} active cart(s) and ${activeOrderCount} active order(s). Resolve those before removing.`,
+            );
+        }
 
         await prisma.product.update({
             where: { id },
