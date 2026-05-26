@@ -91,6 +91,7 @@ model Category {
   products Product[]
 
   @@index([parentId])
+  @@index([deletedAt])
 }
 
 model Product {
@@ -117,6 +118,7 @@ model Product {
 
   @@index([categoryId])
   @@index([isActive])
+  @@index([deletedAt])
   @@index([createdAt, id])
 }
 
