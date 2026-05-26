@@ -2,6 +2,7 @@ import Link from "next/link";
 import { api } from "@/services/apiClient";
 import RefundRequestActions from "@/components/RefundRequestActions";
 import { formatDate } from "@/lib/dates";
+import { formatMoney } from "@repo/shared";
 
 export const dynamic = "force-dynamic";
 
@@ -38,14 +39,6 @@ const STATUS_LABELS: Record<string, string> = {
     REJECTED: "Rejected",
 };
 
-function formatMoney(minor: string, currency: string): string {
-    const amount = BigInt(minor);
-    const major = Number(amount) / 100;
-    return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: currency.toUpperCase(),
-    }).format(major);
-}
 
 export default async function AdminRefundRequestsPage({
     searchParams,
