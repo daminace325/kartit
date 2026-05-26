@@ -609,39 +609,42 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 
 ### Tier B — ecomm domain depth
 
-#### 1.30 — Human-readable order numbers
-- New `Order.orderNumber String @unique` like `ECM-20260509-A1B2C3`. Computed in service layer.
-- Surface in UI; never expose cuid.
+#### 1.30 — Human-readable order numbers ✅
+- `Order.orderNumber String @unique` — format `ECM-YYYYMMDD-XXXXXX` generated in `orders.service.ts`.
+- Surfaced in customer order list/detail and admin order list/detail; CUID never exposed.
 
-#### 1.31 — `Product.sku String @unique` + barcode
-- Required field on product create form.
+#### 1.31 — `Product.sku String @unique` + barcode ✅
+- Required field on product create/edit form (`ProductForm.tsx`). Displayed in admin product table.
 
-#### 1.32 — Soft delete on `Product` + `Category` *(promote earlier if product deletes are next)*
-- `deletedAt DateTime?` instead of hard delete; queries filter `deletedAt: null`.
-- Avoids breaking historical orders that link back to products.
-- Current risk: product deletion only blocks in-flight orders. Completed/cancelled historical `OrderItem.productId` rows still require a live `Product`, so hard delete can fail or break order history unless 1.33 lands first.
+#### 1.32 — Soft delete on `Product` + `Category` ✅
+- `deletedAt DateTime?` on both models. All queries filter `deletedAt: null`.
+- Category deletion cascades soft-delete to children and their products in a transaction.
+- Cart and order services check `deletedAt` before allowing operations.
 
-#### 1.33 — `OrderItem` snapshot enrichment
-- Add `productSlug` and `imageUrl` snapshot fields so order history renders even after product deletion.
+#### 1.33 — `OrderItem` snapshot enrichment ✅
+- `productSlug` and `imageUrl` fields on `OrderItem`, copied from `Product` at order creation time so order history survives product changes/deletion.
 
-#### 1.34 — Inventory adjustment log
-- New model `InventoryEntry { productId, delta, reason: SOLD|RETURNED|DAMAGED|RECOUNT|MANUAL, orderId?, actorUserId?, createdAt }`.
-- Every `stock` change writes one entry. `Product.stock` becomes a derived/cached column reconciled from the entries.
+#### 1.34 — Inventory adjustment log **[SKIPPED]**
+- ~~New model `InventoryEntry { productId, delta, reason: SOLD|RETURNED|DAMAGED|RECOUNT|MANUAL, orderId?, actorUserId?, createdAt }`.~~
+- ~~Every `stock` change writes one entry. `Product.stock` becomes a derived/cached column reconciled from the entries.~~
 
-#### 1.35 — Discount codes (basic)
-- `Promotion { code @unique, type: PERCENT|FIXED, value, validFrom?, validUntil?, maxUses?, minSubtotalMinor? }`.
-- Apply at checkout: `POST /cart/promotion { code }`. Snapshot on `Order` (`promotionCode`, `discountMinor`).
+#### 1.35 — Discount codes (basic) ✅
+- `Promotion` model with `code @unique`, `type: PERCENTAGE|FIXED_AMOUNT`, `value`, `minSubtotalMinor?`, `maxUses?`, `maxUsesPerUser?`, `startsAt?`, `endsAt?`, `isActive`.
+- Full admin CRUD at `/admin/promotions`. Applied at checkout; snapshot on `Order` (`promotionCode`, `discountMinor`).
 
-#### 1.36 — Returns / RMA flow
-- `Return { id, orderId, status: REQUESTED|APPROVED|RECEIVED|REFUNDED|REJECTED, reason, createdAt }`.
-- Admin approves → triggers refund flow from 1.4.
+#### 1.36 — Returns / RMA flow **[SKIPPED — `RefundRequest` exists instead]**
+- A simpler `RefundRequest` model (PENDING|APPROVED|REJECTED) with Stripe refund on approval satisfies the core need. Full RMA (RECEIVED warehouse tracking, RMA numbers) skipped.
+- ~~`Return { id, orderId, status: REQUESTED|APPROVED|RECEIVED|REFUNDED|REJECTED, reason, createdAt }`.~~
+- ~~Admin approves → triggers refund flow from 1.4.~~
 
-#### 1.37 — 3DS / SCA handling on web
-- Detect `payment_intent.requires_action` and call `stripe.confirmCardPayment` / `handleNextAction` from the web side.
-- Show "Verifying with your bank…" UI.
+#### 1.37 — 3DS / SCA handling on web **[SKIPPED — Payment Element handles it]**
+- Stripe Payment Element's built-in `confirmPayment()` redirect flow covers 3DS/SCA without explicit `handleNextAction` code. Dedicated "Verifying with your bank…" UI skipped.
+- ~~Detect `payment_intent.requires_action` and call `stripe.confirmCardPayment` / `handleNextAction` from the web side.~~
+- ~~Show "Verifying with your bank…" UI.~~
 
-#### 1.38 — Search index
-- Postgres `tsvector` column on `Product` (name + description), GIN index. `q` filter switches from `contains` to `to_tsquery`.
+#### 1.38 — Search index **[SKIPPED]**
+- Current `contains` + `mode: "insensitive"` query on name/description is adequate for the project scope. Full-text tsvector/GIN index skipped.
+- ~~Postgres `tsvector` column on `Product` (name + description), GIN index. `q` filter switches from `contains` to `to_tsquery`.~~
 
 ---
 
