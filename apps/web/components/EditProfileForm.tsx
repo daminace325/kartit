@@ -14,7 +14,7 @@ export default function EditProfileForm({
 }) {
     const router = useRouter();
     const [name, setName] = useState(initialName);
-    const { execute, loading, error, clearError } = useApiMutation();
+    const { execute, loading, error } = useApiMutation();
     const [saved, setSaved] = useState(false);
 
     async function handleSubmit(e: React.SyntheticEvent) {

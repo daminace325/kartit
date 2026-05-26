@@ -11,7 +11,7 @@ export default function ChangePasswordForm() {
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
-    const { execute, loading, error, setError, clearError } = useApiMutation();
+    const { execute, loading, error, setError } = useApiMutation();
     const [saved, setSaved] = useState(false);
 
     async function handleSubmit(e: React.SyntheticEvent) {

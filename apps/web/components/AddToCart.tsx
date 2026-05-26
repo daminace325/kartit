@@ -15,7 +15,7 @@ export default function AddToCart({
 }) {
     const router = useRouter();
     const [qty, setQty] = useState(1);
-    const { execute, loading, error, clearError } = useApiMutation();
+    const { execute, loading, error } = useApiMutation();
     const [added, setAdded] = useState(false);
 
     const outOfStock = stock <= 0;

@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { minorToMajor, majorToMinor, type PromotionDTO } from "@repo/shared";
-import { api } from "@/services/apiClient";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
@@ -97,7 +96,7 @@ export default function PromotionForm({ mode, initial }: Props) {
                 }
             }
         } catch (err) {
-            // @ts-ignore
+            // @ts-expect-error err is unknown from catch
             setError(err.message ?? "Invalid value");
             return;
         }

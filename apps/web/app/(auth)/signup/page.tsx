@@ -22,7 +22,7 @@ function SignupForm() {
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const { execute, loading, error, clearError } = useApiMutation();
+    const { execute, loading, error } = useApiMutation();
 
     async function handleSubmit(e: React.SyntheticEvent) {
         e.preventDefault();

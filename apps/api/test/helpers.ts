@@ -74,6 +74,7 @@ export async function createTestProduct(overrides?: {
     stock?: number;
     categoryId?: string;
     isActive?: boolean;
+    sku?: string;
 }) {
     const cid =
         overrides?.categoryId ?? (await createTestCategory()).id;
@@ -89,6 +90,7 @@ export async function createTestProduct(overrides?: {
             stock: overrides?.stock ?? 100,
             categoryId: cid,
             isActive: overrides?.isActive ?? true,
+            sku: overrides?.sku ?? `SKU-TEST-${prodCounter}`,
         },
     });
 }

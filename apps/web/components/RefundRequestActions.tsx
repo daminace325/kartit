@@ -14,7 +14,7 @@ interface Props {
 export default function RefundRequestActions({ requestId, size = "md" }: Props) {
     const router = useRouter();
     const [action, setAction] = useState<"approve" | "reject" | null>(null);
-    const { execute, loading, error, clearError } = useApiMutation();
+    const { execute, loading, error } = useApiMutation();
 
     async function doAction(type: "approve" | "reject") {
         setAction(type);

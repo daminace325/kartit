@@ -12,7 +12,7 @@ type Props = {
 
 export default function DeleteButton({ entityType, id, name }: Props) {
     const router = useRouter();
-    const { execute, loading, error, setError, clearError } = useApiMutation();
+    const { execute, loading, error, clearError } = useApiMutation();
 
     async function handleClick() {
         if (!confirm(`Delete ${entityType} "${name}"?`)) return;

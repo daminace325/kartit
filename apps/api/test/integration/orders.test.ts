@@ -209,10 +209,10 @@ describe("Orders API", () => {
 
             const orderId = orderRes.body.order.id;
 
-            // Direct DB mutation to simulate admin flipping to PAID
+            // Direct DB mutation to simulate admin flipping to DELIVERED
             await prisma.order.update({
                 where: { id: orderId },
-                data: { status: OrderStatus.PAID },
+                data: { status: OrderStatus.DELIVERED },
             });
 
             const cancelRes = await request(app)

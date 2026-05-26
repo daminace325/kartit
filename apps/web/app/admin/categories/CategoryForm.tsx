@@ -22,7 +22,7 @@ export default function CategoryForm({ mode, initial, parentOptions }: Props) {
     const [slug, setSlug] = useState(initial?.slug ?? "");
     const [parentId, setParentId] = useState<string>(initial?.parentId ?? "");
     const [slugTouched, setSlugTouched] = useState(Boolean(initial?.slug));
-    const { execute, loading, error, clearError } = useApiMutation();
+    const { execute, loading, error } = useApiMutation();
 
     function onNameChange(value: string) {
         setName(value);
