@@ -242,7 +242,7 @@ export default async function OrderDetailPage({
                                 <div className="flex flex-1 items-center justify-between gap-4">
                                     <div className="min-w-0">
                                         <Link
-                                            href={`/products/${encodeURIComponent(item.productSlug)}`}
+                                            href={`/p/${encodeURIComponent(item.productSlug)}`}
                                             className="truncate text-sm font-medium text-white hover:text-sky-400"
                                         >
                                             {item.productName}
