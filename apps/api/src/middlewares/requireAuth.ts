@@ -26,7 +26,7 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
         payload = verifyToken(token);
     } catch {
         clearAuthCookie(res);
-        return next(AppError.unauthorized("INVALID_TOKEN", "Invalid or expired token"));
+        return next(AppError.unauthorized(ErrorCode.INVALID_TOKEN, "Invalid or expired token"));
     }
 
     try {
