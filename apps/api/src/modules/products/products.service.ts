@@ -111,16 +111,25 @@ export const productsService = {
     },
 
     async create(input: ProductCreateInput) {
-        // slug uniqueness
+        // Check for slug clash including soft-deleted records (which still
+        // occupy the unique constraint). Reuse the slug if the old record
+        // was soft-deleted by clearing its slug first.
         const slugClash = await prisma.product.findUnique({
-            where: { slug: input.slug, deletedAt: null },
-            select: { id: true },
+            where: { slug: input.slug },
+            select: { id: true, deletedAt: true },
         });
         if (slugClash) {
-            throw AppError.conflict(
-                "SLUG_TAKEN",
-                "A product with this slug already exists",
-            );
+            if (slugClash.deletedAt) {
+                await prisma.product.update({
+                    where: { id: slugClash.id },
+                    data: { slug: `deleted-${slugClash.id}-${input.slug}` },
+                });
+            } else {
+                throw AppError.conflict(
+                    "SLUG_TAKEN",
+                    "A product with this slug already exists",
+                );
+            }
         }
 
         // category must exist
@@ -162,14 +171,21 @@ export const productsService = {
 
         if (input.slug && input.slug !== existing.slug) {
             const clash = await prisma.product.findFirst({
-                where: { slug: input.slug, NOT: { id }, deletedAt: null },
-                select: { id: true },
+                where: { slug: input.slug, NOT: { id } },
+                select: { id: true, deletedAt: true },
             });
             if (clash) {
-                throw AppError.conflict(
-                    "SLUG_TAKEN",
-                    "A product with this slug already exists",
-                );
+                if (clash.deletedAt) {
+                    await prisma.product.update({
+                        where: { id: clash.id },
+                        data: { slug: `deleted-${clash.id}-${input.slug}` },
+                    });
+                } else {
+                    throw AppError.conflict(
+                        "SLUG_TAKEN",
+                        "A product with this slug already exists",
+                    );
+                }
             }
         }
 

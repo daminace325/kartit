@@ -93,14 +93,21 @@ export const categoriesService = {
 
     async create(input: CategoryCreateInput) {
         const existing = await prisma.category.findUnique({
-            where: { slug: input.slug, deletedAt: null },
-            select: { id: true },
+            where: { slug: input.slug },
+            select: { id: true, deletedAt: true },
         });
         if (existing) {
-            throw AppError.conflict(
-                "SLUG_TAKEN",
-                "A category with this slug already exists",
-            );
+            if (existing.deletedAt) {
+                await prisma.category.update({
+                    where: { id: existing.id },
+                    data: { slug: `deleted-${existing.id}-${input.slug}` },
+                });
+            } else {
+                throw AppError.conflict(
+                    "SLUG_TAKEN",
+                    "A category with this slug already exists",
+                );
+            }
         }
 
         const parentId = normalizeParentId(input);
@@ -125,14 +132,21 @@ export const categoriesService = {
 
         if (input.slug) {
             const clash = await prisma.category.findFirst({
-                where: { slug: input.slug, NOT: { id }, deletedAt: null },
-                select: { id: true },
+                where: { slug: input.slug, NOT: { id } },
+                select: { id: true, deletedAt: true },
             });
             if (clash) {
-                throw AppError.conflict(
-                    "SLUG_TAKEN",
-                    "A category with this slug already exists",
-                );
+                if (clash.deletedAt) {
+                    await prisma.category.update({
+                        where: { id: clash.id },
+                        data: { slug: `deleted-${clash.id}-${input.slug}` },
+                    });
+                } else {
+                    throw AppError.conflict(
+                        "SLUG_TAKEN",
+                        "A category with this slug already exists",
+                    );
+                }
             }
         }
 
