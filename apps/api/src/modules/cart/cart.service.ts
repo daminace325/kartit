@@ -7,6 +7,7 @@ import {
     type CartSummaryDTO,
 } from "@repo/shared";
 import { AppError } from "../../lib/errors";
+import { promotionsService } from "../promotions/promotions.service";
 
 type CartWithItems = Prisma.CartGetPayload<{
     include: {
@@ -194,7 +195,7 @@ export const cartService = {
         return toCartDTO(updated!);
     },
 
-    async summary(userId: string): Promise<CartSummaryDTO> {
+    async summary(userId: string, promotionCode?: string): Promise<CartSummaryDTO> {
         const cart = await getOrCreateCart(userId);
         if (cart.items.length === 0) {
             throw AppError.badRequest("CART_EMPTY", "Cart is empty");
@@ -223,18 +224,32 @@ export const cartService = {
             0n,
         );
 
-        const pricing = calculatePricing({ subtotal, currency });
+        let discountMinor = 0n;
+        let validPromotion: { id: string; code: string; discountMinor: bigint } | null = null;
+
+        if (promotionCode) {
+            validPromotion = await promotionsService.validate(promotionCode, subtotal, userId);
+            if (!validPromotion) {
+                throw AppError.badRequest("PROMOTION_INVALID", "Invalid or expired promotion code");
+            }
+            discountMinor = validPromotion.discountMinor;
+        }
+
+        const pricing = calculatePricing({ subtotal, currency, discountMinor });
 
         return {
             cartId: cart.id,
             items,
             currency: pricing.currency,
             subtotalMinor: pricing.subtotal.toString(),
+            discountMinor: pricing.discount.toString(),
             shippingMinor: pricing.shipping.toString(),
             taxMinor: pricing.tax.toString(),
             totalMinor: pricing.total.toString(),
             shippingNote: pricing.shippingNote,
             taxNote: pricing.taxNote,
+            discountNote: pricing.discountNote,
+            promotionCode: validPromotion?.code,
         };
     },
 };

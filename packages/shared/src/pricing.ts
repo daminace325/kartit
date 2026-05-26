@@ -7,11 +7,14 @@ type PricingInput = {
     /** Subtotal in minor units. */
     subtotal: bigint;
     currency: string;
+    /** Discount amount in minor units (applied before tax calculation). */
+    discountMinor?: bigint;
 };
 
 type PricingBreakdown = {
     /** All amounts are minor-unit BigInts. */
     subtotal: bigint;
+    discount: bigint;
     shipping: bigint;
     tax: bigint;
     total: bigint;
@@ -20,6 +23,8 @@ type PricingBreakdown = {
     shippingNote?: string;
     /** Human-readable note for UI, e.g. "Incl. 18% GST". */
     taxNote?: string;
+    /** Human-readable note for UI, e.g. "10% off with code SAVE10". */
+    discountNote?: string;
 };
 
 type CurrencyRule = {
@@ -82,10 +87,15 @@ export function calculatePricing(input: PricingInput): PricingBreakdown {
     const currency = (input.currency || "USD").toUpperCase();
     const rule = RULES[currency] ?? DEFAULT_RULE;
 
+    const discount = input.discountMinor && input.discountMinor > 0n
+        ? (input.discountMinor > subtotal ? subtotal : input.discountMinor)
+        : 0n;
+    const taxable = subtotal - discount;
+
     const freeShipping = rule.freeShippingOver > 0n && subtotal >= rule.freeShippingOver;
     const shipping = subtotal === 0n ? 0n : freeShipping ? 0n : rule.shippingFlat;
-    const tax = applyRate(subtotal, rule.taxRate);
-    const total = subtotal + shipping + tax;
+    const tax = applyRate(taxable, rule.taxRate);
+    const total = taxable + shipping + tax;
 
     let shippingNote: string | undefined;
     if (subtotal === 0n) {
@@ -102,5 +112,10 @@ export function calculatePricing(input: PricingInput): PricingBreakdown {
             ? `Incl. ${(rule.taxRate * 100).toFixed(0)}% ${rule.taxLabel ?? "tax"}`
             : undefined;
 
-    return { subtotal, shipping, tax, total, currency, shippingNote, taxNote };
+    const discountNote =
+        discount > 0n
+            ? `Discount: -${rule.currencySymbol}${(Number(discount) / 100).toFixed(2)}`
+            : undefined;
+
+    return { subtotal, discount, shipping, tax, total, currency, shippingNote, taxNote, discountNote };
 }

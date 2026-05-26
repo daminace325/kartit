@@ -40,6 +40,7 @@ export const clearCart = asyncHandler(async (req, res) => {
 });
 
 export const getCartSummary = asyncHandler(async (req, res) => {
-    const summary = await cartService.summary(userIdOrThrow(req));
+    const promotionCode = (req.body as { promotionCode?: string }).promotionCode;
+    const summary = await cartService.summary(userIdOrThrow(req), promotionCode);
     res.json(summary);
 });

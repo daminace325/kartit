@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { Elements } from "@stripe/react-stripe-js";
-import { formatMoney, type AddressDTO } from "@repo/shared";
+import { formatMoney, type AddressDTO, type CartSummaryDTO } from "@repo/shared";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { PayForm } from "@/components/payment/PayForm";
 import { useIdempotencyKey } from "@/hooks/useIdempotencyKey";
 import { useStripeCheckout } from "@/hooks/useStripeCheckout";
+import { apiFetch, ApiClientError } from "@/services/apiClient";
 
 type Row = {
     productId: string;
@@ -30,6 +31,9 @@ interface Props {
     addresses: AddressDTO[];
     shippingNote?: string;
     taxNote?: string;
+    discountMinor: string;
+    discountNote?: string;
+    initialPromoCode?: string;
 }
 
 export default function CheckoutClient(props: Props) {
@@ -44,21 +48,68 @@ export default function CheckoutClient(props: Props) {
         addresses,
         shippingNote,
         taxNote,
+        discountMinor,
+        discountNote,
+        initialPromoCode,
     } = props;
 
     const [selectedAddressId, setSelectedAddressId] = useState(
         addresses[0]?.id ?? "",
     );
+    const [promoCode, setPromoCode] = useState(initialPromoCode ?? "");
+    const [promoInput, setPromoInput] = useState(initialPromoCode ?? "");
+    const [applying, setApplying] = useState(false);
+    const [promoError, setPromoError] = useState<string | null>(null);
+    const [localDiscountMinor, setLocalDiscountMinor] = useState(discountMinor);
+    const [localDiscountNote, setLocalDiscountNote] = useState(discountNote);
+    const [localTotalMinor, setLocalTotalMinor] = useState(totalMinor);
+    const [localShippingMinor, setLocalShippingMinor] = useState(shippingMinor);
+    const [localTaxMinor, setLocalTaxMinor] = useState(taxMinor);
 
     const { getBaseKey, clearKey } = useIdempotencyKey({
         currency,
-        totalMinor,
+        totalMinor: localTotalMinor,
         selectedAddressId,
         rows,
     });
 
     const { stripe, creating, orderError, order, startPayment } =
         useStripeCheckout(publishableKey);
+
+    const handleStartPayment = () => {
+        startPayment(getBaseKey(), selectedAddressId, promoCode || undefined);
+    };
+
+    const applyPromo = useCallback(async (code: string) => {
+        const trimmed = code.trim();
+        setApplying(true);
+        setPromoError(null);
+        try {
+            const data = await apiFetch<CartSummaryDTO>("/cart/summary", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(trimmed ? { promotionCode: trimmed } : {}),
+            });
+            setPromoCode(data.promotionCode ?? trimmed);
+            setPromoInput(data.promotionCode ?? trimmed);
+            setLocalDiscountMinor(data.discountMinor);
+            setLocalDiscountNote(data.discountNote);
+            setLocalTotalMinor(data.totalMinor);
+            setLocalShippingMinor(data.shippingMinor);
+            setLocalTaxMinor(data.taxMinor);
+        } catch (err) {
+            if (err instanceof ApiClientError) {
+                setPromoError(err.message);
+            } else {
+                setPromoError("Failed to apply promo code");
+            }
+        } finally {
+            setApplying(false);
+        }
+    }, []);
+
+    const displayDiscount = localDiscountMinor;
+    const hasDiscount = BigInt(displayDiscount) > 0n;
 
     return (
         <div className="mt-8 grid gap-8 lg:grid-cols-[2fr_1fr]">
@@ -164,6 +215,67 @@ export default function CheckoutClient(props: Props) {
                 </section>
 
                 <section>
+                    <h2 className="text-lg font-semibold text-white">Promo code</h2>
+                    <div className="mt-4 rounded-md border border-slate-700 bg-slate-800 p-5">
+                        {promoCode ? (
+                            <div className="flex items-center gap-2">
+                                <span className="flex-1 text-sm font-medium text-emerald-300">
+                                    {promoCode}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => applyPromo("")}
+                                    disabled={applying}
+                                    className="text-emerald-400 hover:text-emerald-200"
+                                    aria-label="Remove promo code"
+                                >
+                                    {applying ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <X className="h-4 w-4" />
+                                    )}
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={promoInput}
+                                    onChange={(e) => {
+                                        setPromoInput(e.target.value);
+                                        setPromoError(null);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            applyPromo(promoInput);
+                                        }
+                                    }}
+                                    placeholder="Enter promo code"
+                                    maxLength={30}
+                                    className="flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => applyPromo(promoInput)}
+                                    disabled={applying || !promoInput.trim()}
+                                    className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-600 disabled:opacity-50"
+                                >
+                                    {applying ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        "Apply"
+                                    )}
+                                </button>
+                            </div>
+                        )}
+                        {promoError && (
+                            <p className="mt-2 text-xs text-red-400">{promoError}</p>
+                        )}
+                    </div>
+                </section>
+
+                <section>
                     <h2 className="text-lg font-semibold text-white">Payment</h2>
                     <div className="mt-4 rounded-md border border-slate-700 bg-slate-800 p-5">
                         {!order ? (
@@ -175,7 +287,7 @@ export default function CheckoutClient(props: Props) {
                                 {orderError && <ErrorBanner message={orderError} className="mt-3 rounded-md text-red-200" />}
                                 <button
                                     type="button"
-                                    onClick={() => startPayment(getBaseKey(), selectedAddressId)}
+                                    onClick={handleStartPayment}
                                     disabled={creating || !selectedAddressId}
                                     className="mt-4 inline-flex items-center justify-center gap-2 rounded-md bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-400 disabled:opacity-60"
                                 >
@@ -199,7 +311,7 @@ export default function CheckoutClient(props: Props) {
                             >
                                 <PayForm
                                     orderId={order.id}
-                                    totalMinor={totalMinor}
+                                    totalMinor={localTotalMinor}
                                     currency={currency}
                                     clearIdempotencyKey={clearKey}
                                 />
@@ -217,6 +329,21 @@ export default function CheckoutClient(props: Props) {
                             <dt>Subtotal</dt>
                             <dd>{formatMoney(subtotalMinor, currency)}</dd>
                         </div>
+                        {hasDiscount && (
+                            <div className="flex justify-between text-emerald-400">
+                                <dt>
+                                    Discount
+                                    {localDiscountNote && (
+                                        <span className="ml-1 text-xs text-emerald-500">
+                                            ({localDiscountNote})
+                                        </span>
+                                    )}
+                                </dt>
+                                <dd>
+                                    -{formatMoney(displayDiscount, currency)}
+                                </dd>
+                            </div>
+                        )}
                         <div className="flex justify-between text-slate-300">
                             <dt>
                                 Shipping
@@ -227,9 +354,9 @@ export default function CheckoutClient(props: Props) {
                                 )}
                             </dt>
                             <dd>
-                                {BigInt(shippingMinor) === 0n
+                                {BigInt(localShippingMinor) === 0n
                                     ? "Free"
-                                    : formatMoney(shippingMinor, currency)}
+                                    : formatMoney(localShippingMinor, currency)}
                             </dd>
                         </div>
                         <div className="flex justify-between text-slate-300">
@@ -240,15 +367,15 @@ export default function CheckoutClient(props: Props) {
                                 )}
                             </dt>
                             <dd>
-                                {BigInt(taxMinor) === 0n
+                                {BigInt(localTaxMinor) === 0n
                                     ? "—"
-                                    : formatMoney(taxMinor, currency)}
+                                    : formatMoney(localTaxMinor, currency)}
                             </dd>
                         </div>
                         <div className="my-3 h-px bg-slate-700" />
                         <div className="flex justify-between text-base font-semibold text-white">
                             <dt>Total</dt>
-                            <dd>{formatMoney(totalMinor, currency)}</dd>
+                            <dd>{formatMoney(localTotalMinor, currency)}</dd>
                         </div>
                     </dl>
                 </div>

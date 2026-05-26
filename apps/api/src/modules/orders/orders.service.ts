@@ -17,6 +17,7 @@ import {
 import { AppError } from "../../lib/errors";
 import { env } from "../../config/env";
 import { getStripe } from "../../lib/stripe";
+import { promotionsService } from "../promotions/promotions.service";
 
 function generateOrderNumber(): string {
     const today = new Date();
@@ -84,8 +85,10 @@ export function toOrderDTO(order: OrderWithItems): OrderDTO {
         subtotalMinor: order.subtotalMinor.toString(),
         shippingMinor: order.shippingMinor.toString(),
         taxMinor: order.taxMinor.toString(),
+        discountMinor: order.discountMinor.toString(),
         totalMinor: order.totalMinor.toString(),
         currency: order.currency,
+        promotionCode: order.promotionCode,
         shippingName: order.shippingName,
         shippingPhone: order.shippingPhone,
         shippingLine1: order.shippingLine1,
@@ -171,7 +174,29 @@ export const ordersService = {
             0n,
         );
         const currency = cart.items[0].product.currency;
-        const pricing = calculatePricing({ subtotal, currency });
+
+        let discountMinor = 0n;
+        let promotionId: string | null = null;
+        let appliedPromotionCode: string | null = null;
+
+        if (input.promotionCode) {
+            const promo = await promotionsService.validate(
+                input.promotionCode,
+                subtotal,
+                userId,
+            );
+            if (!promo) {
+                throw AppError.badRequest(
+                    "PROMOTION_INVALID",
+                    "Invalid or expired promotion code",
+                );
+            }
+            discountMinor = promo.discountMinor;
+            promotionId = promo.id;
+            appliedPromotionCode = promo.code;
+        }
+
+        const pricing = calculatePricing({ subtotal, currency, discountMinor });
 
         // Phase 1 only supports a single Stripe currency. Reject mismatched
         // catalog currencies up front rather than at Stripe API time.
@@ -219,9 +244,12 @@ export const ordersService = {
                     userId,
                     status: OrderStatus.PENDING,
                     subtotalMinor: pricing.subtotal,
+                    discountMinor: pricing.discount,
                     shippingMinor: pricing.shipping,
                     taxMinor: pricing.tax,
                     totalMinor: pricing.total,
+                    promotionId,
+                    promotionCode: appliedPromotionCode,
                     currency: pricing.currency,
                     shippingName: shippingAddress.name,
                     shippingPhone: shippingAddress.phone,

@@ -40,9 +40,12 @@ export type CartSummaryDTO = {
     items: CartItemDTO[];
     currency: string;
     subtotalMinor: string;
+    discountMinor: string;
     shippingMinor: string;
     taxMinor: string;
     totalMinor: string;
     shippingNote?: string;
     taxNote?: string;
+    discountNote?: string;
+    promotionCode?: string;
 };

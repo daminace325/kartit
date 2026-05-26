@@ -169,8 +169,12 @@ model Order {
   subtotalMinor BigInt
   shippingMinor BigInt      @default(0)
   taxMinor      BigInt      @default(0)
+  discountMinor BigInt      @default(0)
   totalMinor    BigInt
   currency      String      @db.Char(3)
+  promotionId   String?
+  promotion     Promotion?  @relation(fields: [promotionId], references: [id])
+  promotionCode String?
   shippingName       String
   shippingPhone      String
   shippingLine1      String
@@ -275,4 +279,24 @@ model WebhookEvent {
 
   @@index([provider])
   @@index([processedAt])
+}
+
+model Promotion {
+  id               String    @id @default(cuid())
+  code             String    @unique @db.Citext
+  type             String    // PERCENTAGE | FIXED_AMOUNT
+  value            BigInt    // basis points for % (1000 = 10.00%), minor units for fixed
+  minSubtotalMinor BigInt?   // minimum subtotal required to qualify
+  maxUses          Int?      // total usage limit, null = unlimited
+  maxUsesPerUser   Int?      // per-user usage limit, null = unlimited
+  startsAt         DateTime?
+  endsAt           DateTime?
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  orders Order[]
+
+  @@index([code])
+  @@index([isActive])
 }

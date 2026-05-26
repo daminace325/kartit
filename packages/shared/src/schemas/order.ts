@@ -3,6 +3,7 @@ import { OrderStatus } from "../enums";
 
 export const orderCreateSchema = z.object({
     shippingAddressId: z.string().min(1),
+    promotionCode: z.string().min(1).optional(),
 });
 export type OrderCreateInput = z.infer<typeof orderCreateSchema>;
 
@@ -57,8 +58,10 @@ export type OrderDTO = {
     subtotalMinor: string;
     shippingMinor: string;
     taxMinor: string;
+    discountMinor: string;
     totalMinor: string;
     currency: string;
+    promotionCode: string | null;
     shippingName: string;
     shippingPhone: string;
     shippingLine1: string;

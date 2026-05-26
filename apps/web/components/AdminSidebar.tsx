@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutDashboard, Package, FolderTree, ShoppingBag, Home } from "lucide-react";
+import { LayoutDashboard, Package, FolderTree, ShoppingBag, Home, Tag } from "lucide-react";
 import SignOutButton from "@/components/SignOutButton";
 
 type AdminSidebarProps = {
@@ -11,6 +11,7 @@ const navItems = [
     { href: "/admin/products", icon: Package, label: "Products" },
     { href: "/admin/categories", icon: FolderTree, label: "Categories" },
     { href: "/admin/orders", icon: ShoppingBag, label: "Orders" },
+    { href: "/admin/promotions", icon: Tag, label: "Promotions" },
 ];
 
 export default function AdminSidebar({ user }: AdminSidebarProps) {

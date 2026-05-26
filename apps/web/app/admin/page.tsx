@@ -1,7 +1,7 @@
 ﻿import Link from "next/link";
-import { Package, FolderTree, ShoppingBag } from "lucide-react";
+import { Package, FolderTree, ShoppingBag, Tag } from "lucide-react";
 import { api } from "@/services/apiClient";
-import type { OrderListResponse, ProductDTO } from "@repo/shared";
+import type { OrderListResponse, ProductDTO, PromotionListResponse } from "@repo/shared";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,7 @@ type ProductList = { items: ProductDTO[]; nextCursor: string | null };
 export default async function AdminDashboardPage() {
     // The Express API doesn't expose count endpoints in P1 — we fetch a page
     // of each resource and use the length as a "≥ N" indicator.
-    const [{ categories }, { items: products }, { items: orders }] =
+    const [{ categories }, { items: products }, { items: orders }, { items: promotions }] =
         await Promise.all([
             api.get<{ categories: Category[] }>("/categories").catch(() => ({
                 categories: [] as Category[],
@@ -21,6 +21,10 @@ export default async function AdminDashboardPage() {
                 nextCursor: null,
             })),
             api.get<OrderListResponse>("/orders?limit=50").catch(() => ({
+                items: [],
+                nextCursor: null,
+            })),
+            api.get<PromotionListResponse>("/promotions?limit=50").catch(() => ({
                 items: [],
                 nextCursor: null,
             })),
@@ -52,6 +56,14 @@ export default async function AdminDashboardPage() {
             value: orders.length,
             accent: "text-amber-400",
             bg: "bg-amber-500/10",
+        },
+        {
+            href: "/admin/promotions",
+            icon: Tag,
+            label: "Promotions",
+            value: promotions.length,
+            accent: "text-violet-400",
+            bg: "bg-violet-500/10",
         },
     ];
 
@@ -134,6 +146,22 @@ export default async function AdminDashboardPage() {
                             <h3 className="font-semibold text-white">Add a category</h3>
                             <p className="text-sm text-slate-400">
                                 Organize products into a new category
+                            </p>
+                        </div>
+                    </div>
+                </Link>
+                <Link
+                    href="/admin/promotions/new"
+                    className="rounded-lg border border-slate-800 bg-slate-900 p-5 transition hover:border-violet-500/50 hover:bg-slate-800/60"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-violet-500/10 text-violet-400">
+                            <Tag className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h3 className="font-semibold text-white">Create a promotion</h3>
+                            <p className="text-sm text-slate-400">
+                                Set up a discount or coupon code
                             </p>
                         </div>
                     </div>

@@ -24,6 +24,7 @@ export function useStripeCheckout(publishableKey: string) {
     async function startPayment(
         baseKey: string,
         selectedAddressId: string,
+        promotionCode?: string,
     ) {
         if (!selectedAddressId) {
             setOrderError("Select a shipping address before continuing.");
@@ -35,6 +36,7 @@ export function useStripeCheckout(publishableKey: string) {
             const orderData = await createOrder(
                 `${baseKey}:order`,
                 selectedAddressId,
+                promotionCode,
             );
             const orderId = orderData.order?.id;
             if (!orderId) {

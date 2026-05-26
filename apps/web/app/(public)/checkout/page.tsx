@@ -8,8 +8,15 @@ import CheckoutClient from "@/components/CheckoutClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function CheckoutPage() {
+export default async function CheckoutPage({
+    searchParams,
+}: {
+    searchParams: Promise<{ promo?: string }>;
+}) {
     await authRequired("/checkout");
+
+    const sp = await searchParams;
+    const promoFromUrl = sp.promo;
 
     const publishableKey =
         process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
@@ -22,11 +29,18 @@ export default async function CheckoutPage() {
     );
 
     let summary: CartSummaryDTO;
+    let promoInvalid = false;
     try {
-        summary = await api.post<CartSummaryDTO>("/cart/summary");
+        summary = await api.post<CartSummaryDTO>("/cart/summary", {
+            ...(promoFromUrl ? { promotionCode: promoFromUrl } : {}),
+        });
     } catch (err) {
-        // 409 INSUFFICIENT_STOCK / PRODUCT_INACTIVE → bounce back to cart with banner.
-        if (err instanceof ApiClientError && err.status === 409) {
+        if (promoFromUrl && err instanceof ApiClientError && err.code === "PROMOTION_INVALID") {
+            // Promo code invalid — retry without it.
+            promoInvalid = true;
+            summary = await api.post<CartSummaryDTO>("/cart/summary");
+        } else if (err instanceof ApiClientError && err.status === 409) {
+            // 409 INSUFFICIENT_STOCK / PRODUCT_INACTIVE → bounce back to cart with banner.
             return (
                 <div className="mx-auto max-w-3xl">
                     <div className="rounded-md border border-red-500/40 bg-red-500/10 p-6">
@@ -82,6 +96,12 @@ export default async function CheckoutPage() {
                 Review your order and pay securely with Stripe.
             </p>
 
+            {promoInvalid && (
+                <div className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+                    The promo code &quot;{promoFromUrl}&quot; is no longer valid. It has been removed from your order.
+                </div>
+            )}
+
             <CheckoutClient
                 publishableKey={publishableKey}
                 rows={rows}
@@ -93,6 +113,9 @@ export default async function CheckoutPage() {
                 addresses={addresses}
                 shippingNote={summary.shippingNote}
                 taxNote={summary.taxNote}
+                discountMinor={summary.discountMinor}
+                discountNote={summary.discountNote}
+                initialPromoCode={summary.promotionCode}
             />
         </div>
     );

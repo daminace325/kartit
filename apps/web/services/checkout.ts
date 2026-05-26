@@ -3,10 +3,12 @@
 export async function createOrder(
     idempotencyKey: string,
     shippingAddressId: string,
+    promotionCode?: string,
 ) {
-    return api.post<{ order: { id: string } }>("/orders", {
-        shippingAddressId,
-    }, {
+    const body: Record<string, string> = { shippingAddressId };
+    if (promotionCode) body.promotionCode = promotionCode;
+
+    return api.post<{ order: { id: string } }>("/orders", body, {
         headers: { "Idempotency-Key": idempotencyKey },
     });
 }

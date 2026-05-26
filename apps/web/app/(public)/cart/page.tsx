@@ -2,9 +2,10 @@ import Link from "next/link";
 import { ShoppingCart, AlertTriangle } from "lucide-react";
 import { api } from "@/services/apiClient";
 import { authRequired } from "@/lib/auth";
-import { formatMoney, type CartDTO } from "@repo/shared";
+import { formatMoney, type CartDTO, type CartSummaryDTO } from "@repo/shared";
 import CartItemControls from "@/components/CartItemControls";
 import ClearCartButton from "@/components/ClearCartButton";
+import CartSummary from "@/components/CartSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,10 @@ export default async function CartPage() {
 
     const { cart } = await api.get<{ cart: CartDTO }>("/cart");
     const items = cart.items;
+
+    const summary = await api
+        .post<CartSummaryDTO>("/cart/summary")
+        .catch(() => null);
 
     if (items.length === 0) {
         return (
@@ -121,42 +126,49 @@ export default async function CartPage() {
                     })}
                 </div>
 
-                <aside className="h-fit rounded-md border border-slate-700 bg-slate-800 p-5">
-                    <h2 className="text-lg font-semibold text-white">Order summary</h2>
-                    <dl className="mt-4 space-y-2 text-sm">
-                        <div className="flex justify-between text-slate-300">
-                            <dt>
-                                Subtotal ({totalQty} item{totalQty === 1 ? "" : "s"})
-                            </dt>
-                            <dd>
-                                {formatMoney(cart.subtotalMinor, cart.currency)}
-                            </dd>
-                        </div>
-                        <div className="flex justify-between text-slate-300">
-                            <dt>Shipping &amp; tax</dt>
-                            <dd className="text-slate-400">Calculated at checkout</dd>
-                        </div>
-                        <div className="flex justify-between border-t border-slate-700 pt-3 text-base font-semibold text-white">
-                            <dt>Total</dt>
-                            <dd>
-                                {formatMoney(cart.subtotalMinor, cart.currency)}
-                            </dd>
-                        </div>
-                    </dl>
+                {summary ? (
+                    <CartSummary
+                        initialSummary={summary}
+                        totalQty={totalQty}
+                    />
+                ) : (
+                    <aside className="h-fit rounded-md border border-slate-700 bg-slate-800 p-5">
+                        <h2 className="text-lg font-semibold text-white">Order summary</h2>
+                        <dl className="mt-4 space-y-2 text-sm">
+                            <div className="flex justify-between text-slate-300">
+                                <dt>
+                                    Subtotal ({totalQty} item{totalQty === 1 ? "" : "s"})
+                                </dt>
+                                <dd>
+                                    {formatMoney(cart.subtotalMinor, cart.currency)}
+                                </dd>
+                            </div>
+                            <div className="flex justify-between text-slate-300">
+                                <dt>Shipping &amp; tax</dt>
+                                <dd className="text-slate-400">Calculated at checkout</dd>
+                            </div>
+                            <div className="flex justify-between border-t border-slate-700 pt-3 text-base font-semibold text-white">
+                                <dt>Total</dt>
+                                <dd>
+                                    {formatMoney(cart.subtotalMinor, cart.currency)}
+                                </dd>
+                            </div>
+                        </dl>
 
-                    <Link
-                        href="/checkout"
-                        className="mt-5 block rounded-md bg-sky-500 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-sky-400"
-                    >
-                        Proceed to checkout
-                    </Link>
-                    <Link
-                        href="/"
-                        className="mt-2 block text-center text-sm text-slate-400 hover:text-white"
-                    >
-                        Continue shopping
-                    </Link>
-                </aside>
+                        <Link
+                            href="/checkout"
+                            className="mt-5 block rounded-md bg-sky-500 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-sky-400"
+                        >
+                            Proceed to checkout
+                        </Link>
+                        <Link
+                            href="/"
+                            className="mt-2 block text-center text-sm text-slate-400 hover:text-white"
+                        >
+                            Continue shopping
+                        </Link>
+                    </aside>
+                )}
             </div>
         </div>
     );

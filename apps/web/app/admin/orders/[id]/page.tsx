@@ -227,6 +227,24 @@ export default async function AdminOrderDetailPage({
                                     )}
                                 </dd>
                             </div>
+                            {BigInt(order.discountMinor) > 0n && (
+                                <div className="flex justify-between text-emerald-400">
+                                    <dt>
+                                        Discount
+                                        {order.promotionCode && (
+                                            <span className="ml-1 text-xs text-emerald-500">
+                                                ({order.promotionCode})
+                                            </span>
+                                        )}
+                                    </dt>
+                                    <dd>
+                                        -{formatMoney(
+                                            BigInt(order.discountMinor),
+                                            order.currency,
+                                        )}
+                                    </dd>
+                                </div>
+                            )}
                             <div className="flex justify-between text-slate-300">
                                 <dt>Shipping</dt>
                                 <dd>
