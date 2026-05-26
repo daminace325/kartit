@@ -14,7 +14,10 @@ type CartWithItems = Prisma.CartGetPayload<{
         items: {
             include: {
                 product: {
-                    include: { images: true };
+                    include: {
+                        images: true;
+                        category: { select: { isActive: true } };
+                    };
                 };
             };
         };
@@ -25,7 +28,10 @@ const CART_INCLUDE = {
     items: {
         include: {
             product: {
-                include: { images: true },
+                include: {
+                    images: true,
+                    category: { select: { isActive: true } },
+                },
             },
         },
         orderBy: { createdAt: "asc" as const },
@@ -46,7 +52,7 @@ function toItemDTO(item: CartWithItems["items"][number]): CartItemDTO {
         currency: product.currency,
         imageUrl: cover?.url ?? null,
         stock: product.stock,
-        isActive: product.isActive,
+        isActive: product.isActive && product.category.isActive,
         lineTotalMinor: lineTotal.toString(),
     };
 }
@@ -90,10 +96,10 @@ export const cartService = {
     ): Promise<CartDTO> {
         const product = await prisma.product.findUnique({
             where: { id: productId, deletedAt: null },
-            select: { id: true, isActive: true, stock: true },
+            select: { id: true, isActive: true, stock: true, category: { select: { isActive: true } } },
         });
         if (!product) throw AppError.notFound("NOT_FOUND", "Product not found");
-        if (!product.isActive) {
+        if (!product.isActive || !product.category.isActive) {
             throw AppError.badRequest("PRODUCT_INACTIVE", "Product is not available");
         }
 
@@ -146,9 +152,9 @@ export const cartService = {
         } else {
             const product = await prisma.product.findUnique({
                 where: { id: productId, deletedAt: null },
-                select: { stock: true, isActive: true },
+                select: { stock: true, isActive: true, category: { select: { isActive: true } } },
             });
-            if (!product || !product.isActive) {
+            if (!product || !product.isActive || !product.category.isActive) {
                 throw AppError.badRequest("PRODUCT_INACTIVE", "Product is not available");
             }
             if (quantity > product.stock) {
@@ -203,7 +209,7 @@ export const cartService = {
 
         // Stock revalidation (in case stock dropped after items were added).
         for (const item of cart.items) {
-            if (!item.product.isActive || item.product.deletedAt) {
+            if (!item.product.isActive || !item.product.category.isActive || item.product.deletedAt) {
                 throw AppError.conflict(
                     "PRODUCT_INACTIVE",
                     `Product "${item.product.name}" is no longer available`,

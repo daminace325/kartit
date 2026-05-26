@@ -63,6 +63,7 @@ export const productsService = {
         const where: Prisma.ProductWhereInput = {
             isActive: true,
             deletedAt: null,
+            category: { isActive: true, deletedAt: null },
             ...categoryFilter,
             ...(q
                 ? {
@@ -92,7 +93,7 @@ export const productsService = {
 
     async getById(id: string) {
         const product = await prisma.product.findUnique({
-            where: { id, isActive: true, deletedAt: null },
+            where: { id, isActive: true, deletedAt: null, category: { isActive: true, deletedAt: null } },
             include: { images: true },
         });
         if (!product) throw AppError.notFound("NOT_FOUND", "Product not found");
@@ -102,9 +103,9 @@ export const productsService = {
     async getBySlug(slug: string) {
         const product = await prisma.product.findUnique({
             where: { slug, deletedAt: null },
-            include: { images: true },
+            include: { images: true, category: { select: { isActive: true } } },
         });
-        if (!product || !product.isActive) {
+        if (!product || !product.isActive || !product.category.isActive) {
             throw AppError.notFound("NOT_FOUND", "Product not found");
         }
         return toProductDTO(product);
@@ -132,9 +133,9 @@ export const productsService = {
             }
         }
 
-        // category must exist
+        // category must exist and be active
         const categoryExists = await prisma.category.findUnique({
-            where: { id: input.categoryId, deletedAt: null },
+            where: { id: input.categoryId, deletedAt: null, isActive: true },
             select: { id: true },
         });
         if (!categoryExists) {
@@ -191,7 +192,7 @@ export const productsService = {
 
         if (input.categoryId && input.categoryId !== existing.categoryId) {
             const categoryExists = await prisma.category.findUnique({
-                where: { id: input.categoryId, deletedAt: null },
+                where: { id: input.categoryId, deletedAt: null, isActive: true },
                 select: { id: true },
             });
             if (!categoryExists) {

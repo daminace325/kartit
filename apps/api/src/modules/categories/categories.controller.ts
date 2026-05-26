@@ -11,13 +11,17 @@ export const listCategories = asyncHandler(async (req, res) => {
     if (typeof req.query.parentId === "string") {
         query.parentId = req.query.parentId;
     }
+    if (req.query.includeInactive === "true") {
+        query.includeInactive = "true";
+    }
     const categories = await categoriesService.list(query);
     res.json({ categories });
 });
 
 export const getCategoryById = asyncHandler(async (req, res) => {
     const id = String(req.params.id);
-    const category = await categoriesService.getById(id);
+    const includeInactive = req.query.includeInactive === "true";
+    const category = await categoriesService.getById(id, { includeInactive });
     res.json({ category });
 });
 

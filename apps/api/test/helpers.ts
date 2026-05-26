@@ -56,11 +56,12 @@ export async function createAdminUser() {
 
 let catCounter = 0;
 
-export async function createTestCategory(slug?: string, name?: string) {
+export async function createTestCategory(slug?: string, name?: string, isActive = true) {
     return prisma.category.create({
         data: {
             slug: slug ?? `test-category-${++catCounter}`,
             name: name ?? "Test Category",
+            isActive,
         },
     });
 }

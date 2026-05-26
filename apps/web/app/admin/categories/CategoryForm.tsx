@@ -6,7 +6,7 @@ import { slugify } from "@/lib/slugify";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
-type Initial = { id: string; name: string; slug: string; parentId: string | null };
+type Initial = { id: string; name: string; slug: string; parentId: string | null; isActive: boolean };
 
 type ParentOption = { id: string; name: string };
 
@@ -21,6 +21,7 @@ export default function CategoryForm({ mode, initial, parentOptions }: Props) {
     const [name, setName] = useState(initial?.name ?? "");
     const [slug, setSlug] = useState(initial?.slug ?? "");
     const [parentId, setParentId] = useState<string>(initial?.parentId ?? "");
+    const [isActive, setIsActive] = useState<boolean>(initial?.isActive ?? true);
     const [slugTouched, setSlugTouched] = useState(Boolean(initial?.slug));
     const { execute, loading, error } = useApiMutation();
 
@@ -36,6 +37,7 @@ export default function CategoryForm({ mode, initial, parentOptions }: Props) {
             name: name.trim(),
             slug: slug.trim(),
             parentId: parentId ? parentId : null,
+            isActive,
         };
 
         const url =
@@ -113,6 +115,16 @@ export default function CategoryForm({ mode, initial, parentOptions }: Props) {
                     Nesting is limited to 2 levels. Only top-level categories can be parents.
                 </p>
             </div>
+
+            <label className="inline-flex items-center gap-2 text-sm text-slate-200">
+                <input
+                    type="checkbox"
+                    checked={isActive}
+                    onChange={(e) => setIsActive(e.target.checked)}
+                    className="h-4 w-4 accent-sky-500"
+                />
+                Active (visible in storefront)
+            </label>
 
             <div className="flex gap-3 pt-2">
                 <button

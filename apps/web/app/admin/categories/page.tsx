@@ -5,10 +5,10 @@ import DeleteButton from "@/components/DeleteButton";
 
 export const dynamic = "force-dynamic";
 
-type Category = { id: string; slug: string; name: string; parentId: string | null };
+type Category = { id: string; slug: string; name: string; parentId: string | null; isActive: boolean };
 
 export default async function AdminCategoriesPage() {
-    const { categories } = await api.get<{ categories: Category[] }>("/categories");
+    const { categories } = await api.get<{ categories: Category[] }>("/categories?includeInactive=true");
     const nameById = new Map(categories.map((c) => [c.id, c.name]));
 
     return (
@@ -42,6 +42,7 @@ export default async function AdminCategoriesPage() {
                                 <th className="px-4 py-3 font-medium">Name</th>
                                 <th className="px-4 py-3 font-medium">Slug</th>
                                 <th className="px-4 py-3 font-medium">Parent</th>
+                                <th className="px-4 py-3 font-medium">Active</th>
                                 <th className="px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
                         </thead>
@@ -56,6 +57,11 @@ export default async function AdminCategoriesPage() {
                                     </td>
                                     <td className="px-4 py-3 text-slate-300">
                                         {c.parentId ? (nameById.get(c.parentId) ?? "—") : "—"}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <span className={c.isActive ? "text-emerald-400" : "text-red-400"}>
+                                            {c.isActive ? "Yes" : "No"}
+                                        </span>
                                     </td>
                                     <td className="px-4 py-3">
                                         <div className="flex justify-end gap-2">

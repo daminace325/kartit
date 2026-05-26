@@ -6,7 +6,7 @@ import CategoryForm from "../../CategoryForm";
 
 export const dynamic = "force-dynamic";
 
-type Category = { id: string; slug: string; name: string; parentId: string | null };
+type Category = { id: string; slug: string; name: string; parentId: string | null; isActive: boolean };
 
 export default async function EditCategoryPage({
     params,
@@ -18,7 +18,7 @@ export default async function EditCategoryPage({
     let category: Category;
     try {
         ({ category } = await api.get<{ category: Category }>(
-            `/categories/${encodeURIComponent(id)}`,
+            `/categories/${encodeURIComponent(id)}?includeInactive=true`,
         ));
     } catch (err) {
         if (err instanceof ApiClientError && err.status === 404) notFound();

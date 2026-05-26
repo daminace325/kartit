@@ -10,6 +10,7 @@ export const categoryCreateSchema = z.object({
     slug,
     name: z.string().min(1).max(80),
     parentId: z.string().min(1).nullish(),
+    isActive: z.boolean().default(true),
 });
 export type CategoryCreateInput = z.infer<typeof categoryCreateSchema>;
 
@@ -19,5 +20,6 @@ export type CategoryUpdateInput = z.infer<typeof categoryUpdateSchema>;
 export const categoryListQuerySchema = z.object({
     // "null" / "" — only top-level. Otherwise filter by exact parentId.
     parentId: z.string().optional(),
+    includeInactive: z.string().optional(),
 });
 export type CategoryListQuery = z.infer<typeof categoryListQuerySchema>;

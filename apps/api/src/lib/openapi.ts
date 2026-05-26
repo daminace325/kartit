@@ -132,6 +132,7 @@ registry.registerComponent("schemas", "CategoryResponse", {
         slug: { type: "string" },
         name: { type: "string" },
         parentId: { type: "string", nullable: true },
+        isActive: { type: "boolean" },
         subcategories: {
             type: "array",
             items: { $ref: "#/components/schemas/CategoryResponse" },

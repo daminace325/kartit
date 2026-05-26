@@ -11,6 +11,7 @@ const SELECT = {
     slug: true,
     name: true,
     parentId: true,
+    isActive: true,
 } as const;
 
 function normalizeParentId(input: { parentId?: string | null }): string | null | undefined {
@@ -30,7 +31,7 @@ async function assertValidParent(parentId: string, selfId?: string) {
         );
     }
     const parent = await prisma.category.findUnique({
-        where: { id: parentId, deletedAt: null },
+        where: { id: parentId, deletedAt: null, isActive: true },
         select: { id: true, parentId: true },
     });
     if (!parent) {
@@ -59,12 +60,13 @@ async function assertValidParent(parentId: string, selfId?: string) {
 
 export const categoriesService = {
     async list(query: CategoryListQuery = {}) {
+        const isActive = query.includeInactive ? undefined : true;
         const where =
             query.parentId === undefined
-                ? { deletedAt: null }
+                ? { deletedAt: null, isActive }
                 : query.parentId === "" || query.parentId === "null"
-                    ? { parentId: null, deletedAt: null }
-                    : { parentId: query.parentId, deletedAt: null };
+                    ? { parentId: null, deletedAt: null, isActive }
+                    : { parentId: query.parentId, deletedAt: null, isActive };
 
         return prisma.category.findMany({
             where,
@@ -73,9 +75,9 @@ export const categoriesService = {
         });
     },
 
-    async getById(id: string) {
+    async getById(id: string, opts?: { includeInactive?: boolean }) {
         const category = await prisma.category.findUnique({
-            where: { id, deletedAt: null },
+            where: { id, deletedAt: null, isActive: opts?.includeInactive ? undefined : true },
             select: SELECT,
         });
         if (!category) throw AppError.notFound("NOT_FOUND", "Category not found");
@@ -84,7 +86,7 @@ export const categoriesService = {
 
     async getBySlug(slug: string) {
         const category = await prisma.category.findUnique({
-            where: { slug, deletedAt: null },
+            where: { slug, deletedAt: null, isActive: true },
             select: SELECT,
         });
         if (!category) throw AppError.notFound("NOT_FOUND", "Category not found");
@@ -118,6 +120,7 @@ export const categoriesService = {
                 slug: input.slug,
                 name: input.name,
                 parentId: parentId ?? null,
+                isActive: input.isActive,
             },
             select: SELECT,
         });
@@ -159,6 +162,7 @@ export const categoriesService = {
                 ...(input.slug !== undefined ? { slug: input.slug } : {}),
                 ...(input.name !== undefined ? { name: input.name } : {}),
                 ...(parentId !== undefined ? { parentId } : {}),
+                ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
             },
             select: SELECT,
         });
@@ -184,14 +188,14 @@ export const categoriesService = {
             if (children.length > 0) {
                 await tx.category.updateMany({
                     where: { id: { in: children.map((c) => c.id) } },
-                    data: { deletedAt: new Date() },
+                    data: { deletedAt: new Date(), isActive: false },
                 });
             }
 
             // Soft-delete the category itself.
             await tx.category.update({
                 where: { id },
-                data: { deletedAt: new Date() },
+                data: { deletedAt: new Date(), isActive: false },
             });
         });
     },

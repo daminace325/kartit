@@ -140,6 +140,7 @@ export const ordersService = {
                                     orderBy: { position: "asc" },
                                     take: 1,
                                 },
+                                category: { select: { isActive: true } },
                             },
                         },
                     },
@@ -154,7 +155,7 @@ export const ordersService = {
 
         // Re-validate active + stock with current product rows (mirror /cart/summary).
         for (const item of cart.items) {
-            if (!item.product.isActive || item.product.deletedAt) {
+            if (!item.product.isActive || !item.product.category.isActive || item.product.deletedAt) {
                 throw AppError.conflict(
                     "PRODUCT_INACTIVE",
                     `Product "${item.product.name}" is no longer available`,
