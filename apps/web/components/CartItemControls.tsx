@@ -96,7 +96,7 @@ export default function CartItemControls({ productId, qty, stock }: Props) {
                 Remove
             </button>
 
-            {error && <p className="text-xs text-red-300">{error}</p>}
+            {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
         </div>
     );
 }

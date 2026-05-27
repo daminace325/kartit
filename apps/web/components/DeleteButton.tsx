@@ -28,7 +28,7 @@ export default function DeleteButton({ entityType, id, name }: Props) {
     return (
         <div className="inline-flex flex-col items-start gap-1">
             {error && (
-                <div className="flex items-center gap-1 rounded border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-sm text-red-300">
+                <div role="alert" className="flex items-center gap-1 rounded border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-sm text-red-300">
                     <span>{error}</span>
                     <button
                         type="button"

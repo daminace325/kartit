@@ -41,7 +41,7 @@ export default function EditProfileForm({
         <form onSubmit={handleSubmit} className="max-w-lg space-y-5">
             <ErrorBanner message={error} />
             {saved && (
-                <div className="rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+                <div role="status" className="rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
                     Profile updated
                 </div>
             )}

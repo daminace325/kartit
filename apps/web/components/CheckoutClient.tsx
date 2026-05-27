@@ -270,7 +270,7 @@ export default function CheckoutClient(props: Props) {
                             </div>
                         )}
                         {promoError && (
-                            <p className="mt-2 text-xs text-red-400">{promoError}</p>
+                            <p role="alert" className="mt-2 text-xs text-red-400">{promoError}</p>
                         )}
                     </div>
                 </section>

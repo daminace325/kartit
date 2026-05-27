@@ -191,7 +191,7 @@ export default function CartSummary({ initialSummary, totalQty }: Props) {
                     </div>
                 )}
                 {promoError && (
-                    <p className="text-xs text-red-400">{promoError}</p>
+                    <p role="alert" className="text-xs text-red-400">{promoError}</p>
                 )}
             </div>
 
