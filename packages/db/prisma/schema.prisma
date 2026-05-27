@@ -60,7 +60,8 @@ model User {
   cart           Cart?
   orders         Order[]
   addresses      Address[]
-  refundRequests RefundRequest[]
+  refundRequests        RefundRequest[] @relation("UserRefundRequests")
+  reviewedRefundRequests RefundRequest[] @relation("ReviewedByUser")
 }
 
 model Address {
@@ -267,10 +268,11 @@ model RefundRequest {
   orderId    String              @unique
   order      Order               @relation(fields: [orderId], references: [id])
   userId     String
-  user       User                @relation(fields: [userId], references: [id])
+  user       User                @relation("UserRefundRequests", fields: [userId], references: [id])
   status     RefundRequestStatus @default(PENDING)
   reason     String?
   reviewedBy String?
+  reviewer   User?               @relation("ReviewedByUser", fields: [reviewedBy], references: [id], onDelete: SetNull)
   reviewedAt DateTime?
   createdAt  DateTime            @default(now())
   updatedAt  DateTime            @updatedAt
