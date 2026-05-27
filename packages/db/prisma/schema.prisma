@@ -225,6 +225,7 @@ model OrderItem {
   totalMinor     BigInt
 
   @@index([orderId])
+  @@index([productId])
 }
 
 model Payment {
@@ -291,6 +292,7 @@ model WebhookEvent {
   payload     Json
 
   @@index([provider])
+  @@index([type])
   @@index([processedAt])
 }
 
@@ -312,5 +314,6 @@ model Promotion {
 
   @@index([code])
   @@index([isActive])
+  @@index([startsAt, endsAt])
   @@index([createdAt, id])
 }
