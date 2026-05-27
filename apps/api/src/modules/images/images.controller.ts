@@ -16,5 +16,5 @@ export const uploadImage = asyncHandler(async (req, res) => {
 export const deleteImage = asyncHandler(async (req, res) => {
     const { publicId } = req.body as DeleteImageInput;
     await imagesService.remove(publicId);
-    res.json({ ok: true });
+    res.status(204).end();
 });

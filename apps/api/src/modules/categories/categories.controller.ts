@@ -45,5 +45,5 @@ export const updateCategory = asyncHandler(async (req, res) => {
 export const deleteCategory = asyncHandler(async (req, res) => {
     const id = String(req.params.id);
     await categoriesService.remove(id);
-    res.json({ ok: true });
+    res.status(204).end();
 });
