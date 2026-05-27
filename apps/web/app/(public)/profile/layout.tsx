@@ -18,7 +18,7 @@ export default async function ProfileLayout({
     await authRequired("/profile");
 
     return (
-        <main className="mx-auto max-w-6xl px-4 py-8">
+t        <div className="mx-auto max-w-6xl px-4 py-8">
             <Link
                 href="/account"
                 className="mb-4 inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white"
@@ -44,6 +44,6 @@ export default async function ProfileLayout({
                 </aside>
                 <section>{children}</section>
             </div>
-        </main>
+        </div>
     );
 }
