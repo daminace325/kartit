@@ -38,6 +38,10 @@ export const orderStatusUpdateSchema = z.object({
 });
 export type OrderStatusUpdateInput = z.infer<typeof orderStatusUpdateSchema>;
 
+export const refundRequestBodySchema = z.object({
+    reason: z.string().min(1).max(1000).optional(),
+});
+
 export type OrderItemDTO = {
     id: string;
     productId: string;

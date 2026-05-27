@@ -3,6 +3,8 @@ import {
     orderCreateSchema,
     orderListQuerySchema,
     orderStatusUpdateSchema,
+    refundRequestBodySchema,
+    idParamSchema,
 } from "@repo/shared";
 import { validate } from "../../middlewares/validate";
 import { requireAdmin, requireAuth } from "../../middlewares/requireAuth";
@@ -31,17 +33,18 @@ ordersRouter.post("/", validate(orderCreateSchema), idempotency, createOrder);
 
 // Refund request admin endpoints — must be before /:id routes.
 ordersRouter.get("/refund-requests", requireAdmin, listRefundRequests);
-ordersRouter.post("/refund-requests/:id/approve", requireAdmin, approveRefundRequest);
-ordersRouter.post("/refund-requests/:id/reject", requireAdmin, rejectRefundRequest);
+ordersRouter.post("/refund-requests/:id/approve", requireAdmin, validate(idParamSchema, "params"), approveRefundRequest);
+ordersRouter.post("/refund-requests/:id/reject", requireAdmin, validate(idParamSchema, "params"), rejectRefundRequest);
 
-ordersRouter.get("/:id", getOrder);
-ordersRouter.post("/:id/cancel", cancelOrder);
+ordersRouter.get("/:id", validate(idParamSchema, "params"), getOrder);
+ordersRouter.post("/:id/cancel", validate(idParamSchema, "params"), cancelOrder);
 ordersRouter.patch(
     "/:id/status",
     requireAdmin,
+    validate(idParamSchema, "params"),
     validate(orderStatusUpdateSchema),
     updateOrderStatus,
 );
-ordersRouter.post("/:id/refund", requireAdmin, refundOrder);
-ordersRouter.post("/:id/request-refund", requestRefund);
-ordersRouter.get("/:id/refund-request", getRefundRequestByOrder);
+ordersRouter.post("/:id/refund", requireAdmin, validate(idParamSchema, "params"), refundOrder);
+ordersRouter.post("/:id/request-refund", validate(idParamSchema, "params"), validate(refundRequestBodySchema), requestRefund);
+ordersRouter.get("/:id/refund-request", validate(idParamSchema, "params"), getRefundRequestByOrder);

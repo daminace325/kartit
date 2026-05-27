@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { promotionCreateSchema, promotionUpdateSchema } from "@repo/shared";
+import { promotionCreateSchema, promotionUpdateSchema, idParamSchema } from "@repo/shared";
 import { validate } from "../../middlewares/validate";
 import { requireAdmin, requireAuth } from "../../middlewares/requireAuth";
 import {
@@ -15,8 +15,8 @@ promotionsRouter.use(requireAuth);
 
 // Admin-only write endpoints.
 promotionsRouter.post("/", requireAdmin, validate(promotionCreateSchema), createPromotion);
-promotionsRouter.patch("/:id", requireAdmin, validate(promotionUpdateSchema), updatePromotion);
+promotionsRouter.patch("/:id", requireAdmin, validate(idParamSchema, "params"), validate(promotionUpdateSchema), updatePromotion);
 
 // Read endpoints accessible by any authenticated user.
 promotionsRouter.get("/", requireAdmin, listPromotions);
-promotionsRouter.get("/:id", requireAdmin, getPromotion);
+promotionsRouter.get("/:id", requireAdmin, validate(idParamSchema, "params"), getPromotion);

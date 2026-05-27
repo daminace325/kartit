@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { cartAddItemSchema, cartUpdateItemSchema } from "@repo/shared";
+import { cartAddItemSchema, cartUpdateItemSchema, cartSummarySchema, productIdParamSchema } from "@repo/shared";
 import { validate } from "../../middlewares/validate";
 import { requireAuth } from "../../middlewares/requireAuth";
 import {
@@ -20,9 +20,10 @@ cartRouter.get("/", getCart);
 cartRouter.post("/items", validate(cartAddItemSchema), addCartItem);
 cartRouter.patch(
     "/items/:productId",
+    validate(productIdParamSchema, "params"),
     validate(cartUpdateItemSchema),
     updateCartItem,
 );
-cartRouter.delete("/items/:productId", removeCartItem);
+cartRouter.delete("/items/:productId", validate(productIdParamSchema, "params"), removeCartItem);
 cartRouter.delete("/", clearCart);
-cartRouter.post("/summary", getCartSummary);
+cartRouter.post("/summary", validate(cartSummarySchema), getCartSummary);

@@ -11,6 +11,10 @@ export const cartUpdateItemSchema = z.object({
 });
 export type CartUpdateItemInput = z.infer<typeof cartUpdateItemSchema>;
 
+export const cartSummarySchema = z.object({
+    promotionCode: z.string().min(1).optional(),
+});
+
 // Wire DTOs (BigInt -> string at the JSON boundary).
 export type CartItemDTO = {
     id: string;

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { categoryCreateSchema, categoryUpdateSchema } from "@repo/shared";
+import { categoryCreateSchema, categoryUpdateSchema, idParamSchema, slugParamSchema } from "@repo/shared";
 import { validate } from "../../middlewares/validate";
 import { requireAdmin, requireAuth } from "../../middlewares/requireAuth";
 import {
@@ -15,8 +15,8 @@ export const categoriesRouter: Router = Router();
 
 // Public reads
 categoriesRouter.get("/", listCategories);
-categoriesRouter.get("/slug/:slug", getCategoryBySlug);
-categoriesRouter.get("/:id", getCategoryById);
+categoriesRouter.get("/slug/:slug", validate(slugParamSchema, "params"), getCategoryBySlug);
+categoriesRouter.get("/:id", validate(idParamSchema, "params"), getCategoryById);
 
 // Admin writes
 categoriesRouter.post(
@@ -30,7 +30,8 @@ categoriesRouter.put(
     "/:id",
     requireAuth,
     requireAdmin,
+    validate(idParamSchema, "params"),
     validate(categoryUpdateSchema),
     updateCategory,
 );
-categoriesRouter.delete("/:id", requireAuth, requireAdmin, deleteCategory);
+categoriesRouter.delete("/:id", requireAuth, requireAdmin, validate(idParamSchema, "params"), deleteCategory);
