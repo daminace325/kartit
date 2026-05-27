@@ -39,6 +39,7 @@ export default async function Navbar() {
                         <input
                             name="q"
                             type="search"
+                            aria-label="Search products"
                             placeholder="Search products..."
                             className="flex-1 bg-slate-100 px-4 py-2 text-slate-900 outline-none"
                         />
