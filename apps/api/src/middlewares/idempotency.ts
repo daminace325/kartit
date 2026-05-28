@@ -1,14 +1,12 @@
 import { createHash } from "crypto";
 import type { RequestHandler } from "express";
-import { Prisma, prisma } from "@repo/db";
+import { IdempotencyStatus, Prisma, prisma } from "@repo/db";
 import { AppError } from "../lib/errors";
 import { logger } from "../lib/logger";
 
 // 24h cache window per HANDOFF 1.1.
 const TTL_MS = 24 * 60 * 60 * 1000;
 const STALE_IN_PROGRESS_MS = 15 * 60 * 1000;
-const STATUS_IN_PROGRESS = "IN_PROGRESS";
-const STATUS_COMPLETED = "COMPLETED";
 
 // Produce a stable hash of the request body so the same key + same body
 // replays, while same key + different body is rejected as a conflict.
@@ -45,17 +43,17 @@ function isExpired(row: { expiresAt: Date }, now: Date): boolean {
 }
 
 function isStaleInProgress(
-    row: { status: string; createdAt: Date },
+    row: { status: IdempotencyStatus; createdAt: Date },
     now: Date,
 ): boolean {
     return (
-        row.status === STATUS_IN_PROGRESS &&
+        row.status === IdempotencyStatus.IN_PROGRESS &&
         now.getTime() - row.createdAt.getTime() > STALE_IN_PROGRESS_MS
     );
 }
 
 async function removeRecoverableClaim(
-    row: { id: string; status: string; createdAt: Date; expiresAt: Date },
+    row: { id: string; status: IdempotencyStatus; createdAt: Date; expiresAt: Date },
     now: Date,
 ): Promise<boolean> {
     if (!isExpired(row, now) && !isStaleInProgress(row, now)) return false;
@@ -75,7 +73,7 @@ function cleanupRecoverableClaims(now: Date): void {
                 OR: [
                     { expiresAt: { lte: now } },
                     {
-                        status: STATUS_IN_PROGRESS,
+                        status: IdempotencyStatus.IN_PROGRESS,
                         createdAt: {
                             lt: new Date(now.getTime() - STALE_IN_PROGRESS_MS),
                         },
@@ -137,7 +135,7 @@ export const idempotency: RequestHandler = async (req, res, next) => {
                 userId,
                 key,
                 requestHash,
-                status: STATUS_IN_PROGRESS,
+                status: IdempotencyStatus.IN_PROGRESS,
                 expiresAt,
             },
         });
@@ -169,7 +167,7 @@ export const idempotency: RequestHandler = async (req, res, next) => {
                 );
             }
 
-            if (existing.status === STATUS_IN_PROGRESS) {
+            if (existing.status === IdempotencyStatus.IN_PROGRESS) {
                 return next(
                     new AppError(
                         409,
@@ -206,10 +204,10 @@ export const idempotency: RequestHandler = async (req, res, next) => {
                     where: {
                         userId,
                         key,
-                        status: STATUS_IN_PROGRESS,
+                        status: IdempotencyStatus.IN_PROGRESS,
                     },
                     data: {
-                        status: STATUS_COMPLETED,
+                        status: IdempotencyStatus.COMPLETED,
                         responseStatus: status,
                         responseBody: body as Prisma.InputJsonValue,
                     },

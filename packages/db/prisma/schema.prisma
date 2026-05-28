@@ -45,6 +45,11 @@ enum PromotionType {
   FIXED_AMOUNT
 }
 
+enum IdempotencyStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
 // ─── Models ────────────────────────────────────────────────────────────
 
 model User {
@@ -254,7 +259,7 @@ model IdempotencyKey {
   userId         String
   key            String
   requestHash    String
-  status         String // IN_PROGRESS | COMPLETED
+  status         IdempotencyStatus
   responseStatus Int?
   responseBody   Json?
   createdAt      DateTime @default(now())
