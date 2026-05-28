@@ -10,8 +10,8 @@ export function formatApiError(
     if (error == null) return fallback;
     if (typeof error === "string") return error || fallback;
 
-    if (typeof error === "object") {
-        const e = error as { message?: unknown; details?: unknown };
+    if (typeof error === "object" && error !== null) {
+        const e = error as Record<string, unknown>;
 
         // Inline detail object (e.g. validation map { email: ["required"] })
         if (e.details && typeof e.details === "object") {
