@@ -42,16 +42,22 @@ export async function createTestUser(overrides?: {
 
 export async function createAdminUser() {
     const { authService } = await import("../src/modules/auth/auth.service");
+    const { signToken } = await import("../src/lib/jwt");
     const result = await authService.signup({
         email: "admin@example.com",
         password: "adminpass123",
         name: "Admin",
     });
-    await prisma.user.update({
+    const updated = await prisma.user.update({
         where: { id: result.user.id },
         data: { role: "ADMIN" },
+        select: { id: true, email: true, name: true, role: true, tokenVersion: true },
     });
-    return { user: { ...result.user, role: "ADMIN" as const }, token: result.token };
+    const token = signToken({ sub: updated.id, role: updated.role, tv: updated.tokenVersion });
+    return {
+        user: { id: updated.id, email: updated.email, name: updated.name, role: "ADMIN" as const },
+        token,
+    };
 }
 
 let catCounter = 0;
