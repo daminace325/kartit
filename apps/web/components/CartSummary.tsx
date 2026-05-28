@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, X } from "lucide-react";
@@ -18,11 +18,13 @@ export default function CartSummary({ initialSummary, totalQty }: Props) {
     const [promoInput, setPromoInput] = useState(summary.promotionCode ?? "");
     const [applying, setApplying] = useState(false);
     const [promoError, setPromoError] = useState<string | null>(null);
+    const generationRef = useRef(0);
 
     const applyPromo = useCallback(async (code: string) => {
         const trimmed = code.trim();
+        const gen = ++generationRef.current;
+
         if (!trimmed) {
-            // Remove promo code
             setApplying(true);
             setPromoError(null);
             try {
@@ -31,12 +33,14 @@ export default function CartSummary({ initialSummary, totalQty }: Props) {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({}),
                 });
+                if (generationRef.current !== gen) return;
                 setSummary(data);
                 setPromoInput("");
             } catch {
+                if (generationRef.current !== gen) return;
                 setPromoError("Failed to remove promo code");
             } finally {
-                setApplying(false);
+                if (generationRef.current === gen) setApplying(false);
             }
             return;
         }
@@ -49,17 +53,21 @@ export default function CartSummary({ initialSummary, totalQty }: Props) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ promotionCode: trimmed }),
             });
+            if (generationRef.current !== gen) return;
             setSummary(data);
             setPromoInput(data.promotionCode ?? trimmed);
         } catch (err) {
+            if (generationRef.current !== gen) return;
             if (err instanceof ApiClientError) {
                 setPromoError(err.message);
             } else {
                 setPromoError("Failed to apply promo code");
             }
         } finally {
-            setApplying(false);
-            router.refresh();
+            if (generationRef.current === gen) {
+                setApplying(false);
+                router.refresh();
+            }
         }
     }, [router]);
 

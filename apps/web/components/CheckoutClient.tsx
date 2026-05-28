@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Loader2, X } from "lucide-react";
 import { Elements } from "@stripe/react-stripe-js";
@@ -65,6 +65,7 @@ export default function CheckoutClient(props: Props) {
     const [localTotalMinor, setLocalTotalMinor] = useState(totalMinor);
     const [localShippingMinor, setLocalShippingMinor] = useState(shippingMinor);
     const [localTaxMinor, setLocalTaxMinor] = useState(taxMinor);
+    const generationRef = useRef(0);
 
     const { getBaseKey, clearKey } = useIdempotencyKey({
         currency,
@@ -82,6 +83,7 @@ export default function CheckoutClient(props: Props) {
 
     const applyPromo = useCallback(async (code: string) => {
         const trimmed = code.trim();
+        const gen = ++generationRef.current;
         setApplying(true);
         setPromoError(null);
         try {
@@ -90,6 +92,7 @@ export default function CheckoutClient(props: Props) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(trimmed ? { promotionCode: trimmed } : {}),
             });
+            if (generationRef.current !== gen) return;
             setPromoCode(data.promotionCode ?? trimmed);
             setPromoInput(data.promotionCode ?? trimmed);
             setLocalDiscountMinor(data.discountMinor);
@@ -98,13 +101,14 @@ export default function CheckoutClient(props: Props) {
             setLocalShippingMinor(data.shippingMinor);
             setLocalTaxMinor(data.taxMinor);
         } catch (err) {
+            if (generationRef.current !== gen) return;
             if (err instanceof ApiClientError) {
                 setPromoError(err.message);
             } else {
                 setPromoError("Failed to apply promo code");
             }
         } finally {
-            setApplying(false);
+            if (generationRef.current === gen) setApplying(false);
         }
     }, []);
 
