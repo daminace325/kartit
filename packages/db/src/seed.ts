@@ -768,7 +768,7 @@ async function seedCatalog() {
   for (const cat of CATEGORIES) {
     const parent = await prisma.category.upsert({
       where: { slug: cat.slug },
-      update: { name: cat.name, parentId: null },
+      update: { name: cat.name, parentId: null, deletedAt: null, isActive: true },
       create: { slug: cat.slug, name: cat.name },
     });
     console.log(`  category: ${cat.name}`);
@@ -776,7 +776,7 @@ async function seedCatalog() {
     for (const sub of cat.children) {
       const child = await prisma.category.upsert({
         where: { slug: sub.slug },
-        update: { name: sub.name, parentId: parent.id },
+        update: { name: sub.name, parentId: parent.id, deletedAt: null, isActive: true },
         create: { slug: sub.slug, name: sub.name, parentId: parent.id },
       });
       console.log(`    └─ ${sub.name}`);
