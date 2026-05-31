@@ -12,13 +12,16 @@
   "scripts": {
     "dev:web": "npm run dev --workspace=apps/web",
     "dev:api": "npm run build:packages && npm run dev --workspace=apps/api",
-    "dev": "npm run build:packages && concurrently \"npm run dev:web\" \"npm run dev:api\"",
+    "dev:worker": "npm run build:packages && npm run dev --workspace=apps/worker",
+    "dev": "npm run build:packages && concurrently \"npm run dev:web\" \"npm run dev:api\" \"npm run dev:worker\"",
     "build:packages": "npm run build --workspace=packages/shared && npm run build --workspace=packages/db",
     "build:web": "npm run build:packages && npm run build --workspace=apps/web",
     "build:api": "npm run build:packages && npm run build --workspace=apps/api",
-    "build": "npm run build:api && npm run build:web",
+    "build:worker": "npm run build:packages && npm run build --workspace=apps/worker",
+    "build": "npm run build:api && npm run build:web && npm run build:worker",
     "start:web": "npm run start --workspace=apps/web",
     "start:api": "npm run start --workspace=apps/api",
+    "start:worker": "npm run start --workspace=apps/worker",
     "db:generate": "npm run generate --workspace=packages/db",
     "db:migrate:dev": "npm run migrate --workspace=packages/db",
     "db:migrate:deploy": "npm run migrate:deploy --workspace=packages/db",
@@ -29,7 +32,7 @@
     "test": "npm run test --workspace=apps/api",
     "test:api": "npm run test --workspace=apps/api",
     "test:watch": "npm run test:watch --workspace=apps/api",
-    "typecheck": "tsc -p apps/api/tsconfig.json --noEmit && tsc -p apps/web/tsconfig.json --noEmit"
+    "typecheck": "tsc -p apps/api/tsconfig.json --noEmit && tsc -p apps/web/tsconfig.json --noEmit && tsc -p apps/worker/tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

@@ -50,6 +50,12 @@ enum IdempotencyStatus {
   COMPLETED
 }
 
+enum OutboxStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 // ─── Models ────────────────────────────────────────────────────────────
 
 model User {
@@ -321,4 +327,24 @@ model Promotion {
   @@index([isActive])
   @@index([startsAt, endsAt])
   @@index([createdAt, id])
+}
+
+// ─── Phase 2 Infra ───────────────────────────────────────────────────────
+
+// Outbox pattern (P2.3) — durable event store written in the same transaction
+// as business state changes. A separate dispatcher (apps/worker) polls
+// PENDING rows and enqueues them to BullMQ, then marks SENT.
+model Outbox {
+  id            String       @id @default(cuid())
+  aggregateType String       // e.g. "Order", "Payment"
+  aggregateId   String       // the ID of the aggregate root
+  eventType     String       // e.g. "OrderCreated", "OrderPaid", "OrderCancelled"
+  payload       Json         // event data for the worker handler
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  lastError     String?
+  createdAt     DateTime     @default(now())
+  sentAt        DateTime?
+
+  @@index([status, createdAt])
 }

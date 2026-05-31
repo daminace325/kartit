@@ -108,6 +108,21 @@ export const ordersPaymentService = {
                 data: { status: PaymentStatus.SUCCEEDED },
             });
 
+            // P2.3: outbox entry for OrderPaid → order-events queue
+            await tx.outbox.create({
+                data: {
+                    aggregateType: "Order",
+                    aggregateId: order.id,
+                    eventType: "OrderPaid",
+                    payload: {
+                        orderNumber: order.orderNumber,
+                        totalMinor: order.totalMinor.toString(),
+                        currency: order.currency,
+                        userId: order.userId,
+                    },
+                },
+            });
+
             return tx.order.findUniqueOrThrow({
                 where: { id: order.id },
                 include: ORDER_INCLUDE,
@@ -151,6 +166,22 @@ export const ordersPaymentService = {
 
             await restoreInventory(tx, order.items);
 
+            // P2.3: outbox entry for OrderPaymentFailed → order-events queue
+            await tx.outbox.create({
+                data: {
+                    aggregateType: "Order",
+                    aggregateId: order.id,
+                    eventType: "OrderPaymentFailed",
+                    payload: {
+                        orderNumber: order.orderNumber,
+                        failureReason: failureReason ?? "Payment failed",
+                        totalMinor: order.totalMinor.toString(),
+                        currency: order.currency,
+                        userId: order.userId,
+                    },
+                },
+            });
+
             return tx.order.findUniqueOrThrow({
                 where: { id: order.id },
                 include: ORDER_INCLUDE,
@@ -191,6 +222,21 @@ export const ordersPaymentService = {
             });
 
             await restoreInventory(tx, order.items);
+
+            // P2.3: outbox entry for OrderRefunded → order-events queue
+            await tx.outbox.create({
+                data: {
+                    aggregateType: "Order",
+                    aggregateId: order.id,
+                    eventType: "OrderRefunded",
+                    payload: {
+                        orderNumber: order.orderNumber,
+                        totalMinor: order.totalMinor.toString(),
+                        currency: order.currency,
+                        userId: order.userId,
+                    },
+                },
+            });
 
             return tx.order.findUniqueOrThrow({
                 where: { id: order.id },

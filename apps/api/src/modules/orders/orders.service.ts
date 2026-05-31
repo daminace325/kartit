@@ -285,6 +285,21 @@ export const ordersService = {
 
             await tx.cartItem.deleteMany({ where: { cartId } });
 
+            // P2.3: outbox entry for OrderCreated → order-events queue
+            await tx.outbox.create({
+                data: {
+                    aggregateType: "Order",
+                    aggregateId: created.id,
+                    eventType: "OrderCreated",
+                    payload: {
+                        orderNumber: created.orderNumber,
+                        totalMinor: created.totalMinor.toString(),
+                        currency: created.currency,
+                        userId,
+                    },
+                },
+            });
+
             return created;
         });
 
@@ -409,6 +424,19 @@ export const ordersService = {
                     });
                 }
             }
+
+            // P2.3: outbox entry for OrderCancelled → order-events queue
+            await tx.outbox.create({
+                data: {
+                    aggregateType: "Order",
+                    aggregateId: id,
+                    eventType: "OrderCancelled",
+                    payload: {
+                        wasPaid: existing.status !== OrderStatus.PENDING,
+                        userId,
+                    },
+                },
+            });
 
             return tx.order.findUniqueOrThrow({
                 where: { id },

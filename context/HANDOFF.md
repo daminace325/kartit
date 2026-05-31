@@ -54,10 +54,10 @@ Build a production-grade ecomm app for resume → target **Rippling SE I (FinTec
 - **`ProductImage` as separate model** with array
 - **`.env.example` files exist at root, `apps/api/`, and `apps/web/`** — each documents its own required env vars
 - **No markdown docs unless asked**
-- **Phase boundaries:** P1 may add small support tables/fields (`IdempotencyKey`, `WebhookEvent`, `Order` address snapshot fields, `tokenVersion`) when they're needed by a fix. The big infra tables (`Outbox`, `LedgerEntry`, `RefreshToken` family, `Reservation`) and the `apps/worker` service land in P2.
+- **Phase boundaries:** P1 may add small support tables/fields (`IdempotencyKey`, `WebhookEvent`, `Order` address snapshot fields, `tokenVersion`) when they're needed by a fix. P2 infra adds `Outbox` (✅ 2.3), `LedgerEntry` (2.4), `RefreshToken` family (2.12), `Reservation` (2.7) and the `apps/worker` service (✅ 2.3).
 - **Step-by-step**, verify each step before moving on
 
-## Current Prisma schema (Foundation)
+## Current Prisma schema (Foundation + Phase 2 partial)
 
 Models:
 
@@ -71,13 +71,15 @@ Models:
 - **`Order`** — userId, status, subtotalMinor, shippingMinor, taxMinor, totalMinor, currency, paidAt?, items, payments
 - **`OrderItem`** — snapshots productName + unitPriceMinor + currency at purchase time
 - **`Payment`** — orderId (cascade), providerPaymentId? (unique — Stripe PaymentIntent id), status, amountMinor, currency, failureReason?
-- **`IdempotencyKey`** — userId+key unique, requestHash, status, cached response, expiresAt *(P1.1 partially implemented)*
+- **`IdempotencyKey`** — userId+key unique, requestHash, status, cached response, expiresAt *(P1.1 implemented, P2.2 Redis hot path)*
+- **`Outbox`** — aggregateType, aggregateId, eventType, payload (Json), status (`PENDING`|`SENT`|`FAILED`), attempts, lastError, createdAt, sentAt? *(P2.3 — outbox pattern)*
 
 Enums:
 
 - **`UserRole`** — `CUSTOMER`, `ADMIN`
 - **`OrderStatus`** — `PENDING`, `PAID`, `PROCESSING`, `SHIPPED`, `DELIVERED`, `CANCELLED`, `FAILED`, `REFUNDED` *(expanded from the original 5 to support fulfillment lifecycle in 1.7)*
 - **`PaymentStatus`** — `REQUIRES_PAYMENT`, `SUCCEEDED`, `FAILED`, `REFUNDED`
+- **`OutboxStatus`** — `PENDING`, `SENT`, `FAILED` *(P2.3)*
 
 Money everywhere as `BigInt` minor units, currency `Char(3)`. Never floats.
 
@@ -88,6 +90,7 @@ Money everywhere as `BigInt` minor units, currency `Char(3)`. Never floats.
 - `20260510071212_webhook_event_dedupe` — WebhookEvent table
 - `20260512000000_session_invalidation` — User.tokenVersion
 - `20260514174237_citext_email_case_folding` — citext extension + email type change
+- `20260531105522_outbox_pattern` — Outbox model + OutboxStatus enum (P2.3)
 
 ## File structure
 
@@ -95,7 +98,7 @@ Money everywhere as `BigInt` minor units, currency `Char(3)`. Never floats.
 ecomm/
   .editorconfig                  ← 4-space, lf
   .env / .env.example            ← POSTGRES_*, DATABASE_URL
-  docker-compose.yml             ← Postgres only
+  docker-compose.yml             ← Postgres + Redis (default); API + Web + Worker (build profile)
   render.yaml                    ← Render Blueprint (managed pg + ecomm-api)
   package.json                   ← workspaces; dev / build / db:* / typecheck scripts
   tsconfig.base.json             ← @repo/shared, @repo/db path aliases
@@ -178,6 +181,29 @@ ecomm/
       hooks/                     ← useApiMutation.ts, useIdempotencyKey.ts, useStripeCheckout.ts
       services/                  ← apiClient.ts, checkout.ts
       constants/                 ← order-status.ts (status labels, styles, timeline)
+    worker/                       ← **NEW in P2.3** — BullMQ background job processor
+      Dockerfile                  ← multi-stage, non-root nodejs user
+      package.json                ← depends on @repo/db, @repo/shared, bullmq, ioredis
+      tsconfig.json
+      src/
+        index.ts                  ← entry point: starts workers + outbox dispatcher
+        lib/
+          redis.ts                ← REDIS_URL for BullMQ (URL-based, no ioredis instance)
+        queues/
+          index.ts                ← barrel + eventType→queue mapping (getQueueForEvent)
+          order-events.ts         ← order lifecycle (OrderCreated, OrderPaid, etc.)
+          emails.ts               ← email sending (P2.15 will wire Resend/Postmark)
+          reconciliation.ts       ← ledger + reconciliation jobs (P2.4/P2.5)
+          webhooks-retry.ts       ← webhook retry pipeline (P2.9)
+          inventory-sweep.ts      ← abandoned-order sweeping (P2.7)
+        workers/
+          index.ts                ← barrel export of all workers
+          order-events.worker.ts  ← processes OrderCreated/Paid/Cancelled/Refunded/Failed
+          emails.worker.ts        ← processes email.* events (log-only for now)
+          reconciliation.worker.ts ← processes reconciliation.* + ledger.* events (log-only)
+          webhooks-retry.worker.ts ← processes webhook.* retries (log-only for now)
+          inventory-sweep.worker.ts ← processes inventory.* sweep jobs (log-only for now)
+        outbox-dispatcher.ts      ← polls Outbox(PENDING) → enqueues to BullMQ → marks SENT
   packages/
     db/
       .env                       ← DATABASE_URL (for Prisma CLI)
@@ -219,6 +245,8 @@ ecomm/
 - `ecomm/apps/api/.env.example` — template for the above
 - `ecomm/apps/web/.env.local` — `NEXT_PUBLIC_API_URL=http://localhost:5000`, `NEXT_PUBLIC_AUTH_COOKIE_NAME=ecomm_auth`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`
 - `ecomm/apps/web/.env.example` — template for the above
+- `ecomm/apps/worker/.env` — `NODE_ENV=development`, `DATABASE_URL`, `REDIS_URL` (for `tsx watch` and `npm start`)
+- `ecomm/apps/worker/.env.example` — template for the above
 - `ecomm/packages/db/.env` — `DATABASE_URL` (separate, for Prisma CLI)
 
 ## Key gotchas / decisions
@@ -232,12 +260,14 @@ ecomm/
 - **CORS:** `WEB_ORIGINS` (plural) is the env var. Each entry is exact origin or single-`*`-host wildcard. Compiled into matchers once at boot.
 - **`trust proxy: 1`** is set so Render's LB gives correct `req.secure` / `req.ip` and the `Secure` cookie attribute behaves.
 - **Auth rate-limit:** 30 req / 15 min on `/auth/signin` + `/auth/signup` (`express-rate-limit`, draft-7 headers).
-- **P1 schema progress:** `IdempotencyKey`, `WebhookEvent`, order address snapshot fields, `User.tokenVersion` — all implemented. P2-only: `Outbox`, `LedgerEntry`, `RefreshToken` rotation family, `Reservation`.
+- **P2 schema progress:** `Outbox` ✅ (2.3). Remaining P2: `LedgerEntry` (2.4), `RefreshToken` rotation family (2.12), `Reservation` (2.7).
 - **Repo polish gotcha:** `.gitignore` currently ignores `.editorconfig`. `context/` is commented out in `.gitignore` (committed). If this repo is going to GitHub for resume review, stop ignoring `.editorconfig`.
 - **Migration command:** `npm run db:migrate:dev -- --name <name>` from root (or directly in `packages/db`).
 - **`migrate dev` auto-runs `generate`** — don't run generate separately unless after a fresh `npm install`.
 - **Render deploy:** start command runs `db:migrate:deploy && db:seed && start:api`. Seed must be idempotent.
 - **Health probes:** `/health/live` (no deps — Render uses this) vs `/health` and `/health/readyz` (DB + Redis ping — monitoring/traffic gating).
+- **Outbox pattern (P2.3):** Order/payment services write to `Outbox` in the same `$transaction` as business state changes — guarantees atomicity. A separate `apps/worker` process runs the outbox dispatcher (polls PENDING → enqueues to BullMQ) + 5 BullMQ workers. At-least-once delivery; workers must be idempotent. Workers currently log-only — P2.4 (ledger), P2.5 (reconciliation), P2.15 (emails) will wire real side effects.
+- **Worker Redis:** BullMQ uses URL-based connection (`{ url: REDIS_URL }`), not an ioredis instance — avoids type conflicts with BullMQ's bundled ioredis version.
 
 ## Useful commands
 
@@ -245,12 +275,13 @@ ecomm/
 # Start DB
 cd ecomm; docker compose up -d
 
-# Dev (web + api together)
+# Dev (web + api + worker together)
 cd ecomm; npm run dev
 
-# Just API or just web
+# Just API, web, or worker
 cd ecomm; npm run dev:api
 cd ecomm; npm run dev:web
+cd ecomm; npm run dev:worker
 
 # Prisma
 cd ecomm; npm run db:migrate:dev -- --name <name>
@@ -675,7 +706,7 @@ Each item is **additive** to Phase 1 — no rewrites of business logic.
 - **No schema changes** — reuses the existing `IdempotencyKey` table from P1.1.
 - **Middleware refactored** into Redis path + Postgres fallback path, both sharing the same `res.json` hook pattern.
 
-### 2.3 — Outbox pattern + BullMQ + worker service
+### 2.3 — Outbox pattern + BullMQ + worker service ✅ DONE
 - New schema: `Outbox { id, aggregateType, aggregateId, eventType, payload, status, attempts, lastError, createdAt, sentAt? }`.
 - New app: `apps/worker` running BullMQ workers.
 - Queues: `order-events`, `emails`, `reconciliation`, `webhooks-retry`, `inventory-sweep`.
@@ -683,6 +714,13 @@ Each item is **additive** to Phase 1 — no rewrites of business logic.
 - Order/payment services write to `Outbox` **in the same Prisma transaction** as state changes.
 - Order paid → enqueues `send-receipt-email` + `write-ledger-entries`.
 - DLQ + exponential backoff + jitter; alert when DLQ depth > 0.
+- **Migration:** `20260531105522_outbox_pattern`
+- **Integration points:**
+  - `orders.service.ts`: `create()` writes `OrderCreated`, `cancel()` writes `OrderCancelled`
+  - `orders.payment.service.ts`: `markPaidByPaymentIntent()` writes `OrderPaid`, `markFailedByPaymentIntent()` writes `OrderPaymentFailed`, `markRefundedByPaymentIntent()` writes `OrderRefunded`
+- **Worker workers (5):** `order-events` (concurrency 5, 5 attempts), `emails` (10, 5), `reconciliation` (2, 3), `webhooks-retry` (5, 8), `inventory-sweep` (1, 3) — all with exponential backoff + DLQ. Currently log-only; P2.4/P2.5/P2.15 will wire actual side effects.
+- **Dockerfile:** `apps/worker/Dockerfile` (multi-stage, non-root, same pattern as API).
+- **Commands:** `npm run dev:worker`, `npm run build:worker`, `npm run start:worker`.
 
 ### 2.4 — Double-entry ledger
 - New schema: `LedgerEntry { account, direction: DEBIT|CREDIT, amountMinor BigInt, currency, orderId?, paymentId?, reference?, memo?, createdAt }`.
