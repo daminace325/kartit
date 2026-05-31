@@ -26,6 +26,7 @@ graph TD
 
     subgraph Data
         PG[("Postgres 16<br/>Prisma 7")]
+        Redis[("Redis 7<br/>ioredis")]
         Cloudinary["Cloudinary<br/>image CDN"]
         Stripe["Stripe<br/>payments"]
     end
@@ -39,6 +40,7 @@ graph TD
     Web -->|"REST + httpOnly cookie"| API
     Web -->|"Stripe Elements"| Stripe
     API --> PG
+    API --> Redis
     API --> Cloudinary
     API --> Stripe
     API --> Shared
@@ -53,6 +55,7 @@ graph TD
 | Web | Next.js 16 + React 19 + Tailwind v4 |
 | API | Express 5 + TypeScript |
 | Database | Postgres 16 + Prisma 7 (PG adapter) |
+| Cache | Redis 7 + ioredis |
 | Auth | argon2id + JWT in httpOnly cookie |
 | Payments | Stripe PaymentIntents + signed webhooks |
 | Images | Cloudinary server-side upload |
@@ -85,7 +88,7 @@ copy apps\web\.env.example apps\web\.env.local
 
 npm install
 
-# 5. Start Postgres
+# 5. Start Postgres + Redis
 docker compose up -d
 
 # 6. Run migrations and seed
@@ -139,8 +142,9 @@ stripe trigger charge.refunded
 ## API overview
 
 ```
-GET    /health                 DB ping
-GET    /health/live            Liveness (no DB)
+GET    /health                 DB + Redis ping
+GET    /health/live            Liveness (no deps)
+GET    /health/readyz          Readiness (DB + Redis)
 
 POST   /auth/signup            Rate-limited
 POST   /auth/signin            Rate-limited
@@ -198,7 +202,7 @@ ecomm/
     api/                       Express 5 API
       src/
         config/                Validated env loader
-        lib/                   Auth, cache, cloudinary, cookies, errors, jwt, logger, stripe
+        lib/                   Auth, cache (Redis), cloudinary, cookies, errors, jwt, logger, redis, stripe
         middlewares/           Auth, CSRF, error handling, idempotency, validation, upload
         modules/               Feature modules (health, auth, cart, orders, payments, ...)
         jobs/                  Cron scripts (abandoned order sweeper)
@@ -212,7 +216,7 @@ ecomm/
   packages/
     db/                        Prisma 7 schema, migrations, seed, singleton client
     shared/                    Zod schemas, money helpers, enums, error codes, pricing
-  docker-compose.yml           Postgres 16 + optional build profile for api/web
+  docker-compose.yml           Postgres 16 + Redis 7 + optional build profile for api/web
   render.yaml                  Render Blueprint
 ```
 
@@ -252,10 +256,11 @@ CI runs lint → typecheck → test → build on every push and PR via GitHub Ac
 
 ## Deployment
 
-**API + Database:** [Render Blueprint](render.yaml) provisions a managed Postgres instance and the Express API web service. Apply from the Render dashboard → New → Blueprint.
+**API + Database:** [Render Blueprint](render.yaml) provisions a managed Postgres instance, a Redis instance, and the Express API web service. Apply from the Render dashboard → New → Blueprint.
 
 After first deploy, set these env vars in the `ecomm-api` service:
 - `JWT_SECRET` (auto-generated)
+- `REDIS_URL` — Render injects this automatically for managed Redis; set manually if using external Redis
 - `WEB_ORIGINS` — your Vercel domain(s)
 - `CLOUDINARY_*` keys
 - `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET`

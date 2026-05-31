@@ -402,7 +402,7 @@ const rateLimited = {
 registry.registerPath({
     method: "get",
     path: "/health/live",
-    summary: "Liveness probe (no DB)",
+    summary: "Liveness probe (no dependencies)",
     tags: ["Health"],
     responses: {
         200: ok({ type: "object", properties: { status: { type: "string" } } }),
@@ -411,8 +411,10 @@ registry.registerPath({
 
 registry.registerPath({
     method: "get",
-    path: "/health",
-    summary: "Health check with DB ping",
+    path: "/health/readyz",
+    summary: "Readiness probe (DB + Redis required)",
+    description:
+        "Returns 200 when both Postgres and Redis are reachable. Use for orchestrator traffic-gating (e.g. Render health check, k8s readiness probe). Returns 503 if either dependency is down.",
     tags: ["Health"],
     responses: {
         200: ok({
@@ -420,9 +422,28 @@ registry.registerPath({
             properties: {
                 status: { type: "string" },
                 db: { type: "string" },
+                redis: { type: "string" },
             },
         }),
-        503: { description: "Database unreachable" },
+        503: { description: "Database or Redis unreachable" },
+    },
+});
+
+registry.registerPath({
+    method: "get",
+    path: "/health",
+    summary: "Health check with DB + Redis ping",
+    tags: ["Health"],
+    responses: {
+        200: ok({
+            type: "object",
+            properties: {
+                status: { type: "string" },
+                db: { type: "string" },
+                redis: { type: "string" },
+            },
+        }),
+        503: { description: "Database or Redis unreachable" },
     },
 });
 
