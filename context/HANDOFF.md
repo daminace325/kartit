@@ -124,10 +124,13 @@ ecomm/
           validate.ts            ← zod request validator (ZodType, Zod v4)
           requireAuth.ts         ← requireAuth + requireAdmin (extends Express.Request.user)
           csrf.ts                ← X-Requested-With: fetch check on mutating requests
-          idempotency.ts         ← Idempotency-Key header middleware (24h replay cache)
+          idempotency.ts         ← Idempotency-Key middleware (Redis SET NX hot path + Postgres fallback, 24h replay)
           upload.ts              ← multer setup for any direct-upload endpoints
+        jobs/
+          sweepAbandonedOrders.ts     ← PENDING order canceller (30 min, restore inventory)
+          promoteIdempotencyKeys.ts   ← Redis→Postgres idempotency key promotion (2.2)
         modules/
-          health/                ← /health (DB ping) + /health/live (no DB; Render probe)
+          health/                ← /health (DB + Redis ping), /health/readyz (traffic gating), /health/live (no deps)
           auth/                  ← auth.{controller,service,routes}.ts; /auth/signup, /signin, /signout, /sign-out-all, /me, /change-password, profile
           addresses/             ← addresses.{controller,service,routes}.ts; /addresses CRUD
           categories/            ← public GET + admin CRUD
@@ -383,11 +386,12 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 
 ### Tier S — correctness & money-safety (do these first, in order)
 
-#### 1.1 — Idempotency on `POST /orders` ✅ DONE
+#### 1.1 — Idempotency on `POST /orders` ✅ DONE (Redis hot path added in 2.2)
 - **Middleware:** `apps/api/src/middlewares/idempotency.ts`
   - Key scoped to `(userId, key)` with body hash to detect conflicts
   - Caches 2xx responses for 24h, replays on retry
   - Stale IN_PROGRESS claims cleaned up so crashed processes don't block checkout
+  - **P2.2 upgrade:** Redis SET NX hot path for atomic claim; Postgres as durable fallback.
 - **Frontend:** `getCheckoutAttemptKey()` in `CheckoutClient.tsx`
   - Key is cached in `sessionStorage` keyed by cart fingerprint so refreshes during checkout return the same idempotency key and the backend replays the cached response.
   - Key is cleared in `PayForm.onSubmit` just before `stripe.confirmPayment()` — prevents the next checkout visit from replaying stale cached responses (which would return a client secret for a now-terminal PaymentIntent).
@@ -662,10 +666,14 @@ Each item is **additive** to Phase 1 — no rewrites of business logic.
 - **Health:** `/health` now pings both DB and Redis. `/health/readyz` (new) requires both DB + Redis for orchestrator traffic gating. `/health/live` unchanged (no deps).
 - **Env:** `REDIS_URL=redis://localhost:6379` added to root `.env.example`, `apps/api/.env.example`, `docker-compose.yml` api service, and `env.ts`.
 
-### 2.2 — Idempotency middleware moved to Redis hot path
-- The `IdempotencyKey` Postgres table from 1.1 stays as a durable fallback.
-- Hot path: `SET key value NX EX 86400` in Redis.
-- Background job promotes long-lived keys to Postgres.
+### 2.2 — Idempotency middleware moved to Redis hot path ✅ DONE
+- **Redis hot path:** `SET idem:{userId}:{key} <requestHash> NX EX 86400` for atomic claim (fast path). On 2xx success, response cached at `idem:{userId}:{key}:res` with `EX 86400`. On non-2xx, both keys deleted so client can retry.
+- **Postgres fallback:** Entire original logic preserved. If Redis is unreachable (checked via periodic ping every 30s), the middleware falls through to the existing Postgres path transparently.
+- **Durability:** After Redis claim, a fire-and-forget `INSERT` creates the Postgres `IdempotencyKey` row (catches P2002 for already-existing). On completion, both Redis cache + Postgres `updateMany` happen. The response is sent without waiting for Postgres — hot path is fast.
+- **Promotion job:** New `apps/api/src/jobs/promoteIdempotencyKeys.ts` — scans Postgres rows with `status=IN_PROGRESS`, checks Redis for `:res` keys, and promotes any completed-but-stuck rows to COMPLETED in Postgres. Safety net for missed fire-and-forget writes.
+- **npm script:** `npm run job:promote-idempotency` — run as periodic cron.
+- **No schema changes** — reuses the existing `IdempotencyKey` table from P1.1.
+- **Middleware refactored** into Redis path + Postgres fallback path, both sharing the same `res.json` hook pattern.
 
 ### 2.3 — Outbox pattern + BullMQ + worker service
 - New schema: `Outbox { id, aggregateType, aggregateId, eventType, payload, status, attempts, lastError, createdAt, sentAt? }`.
