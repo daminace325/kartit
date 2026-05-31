@@ -1,6 +1,6 @@
 # KartIt
 
-Production-grade ecommerce platform built on a modern TypeScript monorepo. Full-stack checkout flow with Stripe payments, admin product/category/order management, and a hardened Express API.
+Production-grade ecommerce platform built on a modern TypeScript monorepo. Full-stack checkout flow with Stripe payments, admin management, background job processing with BullMQ, an outbox pattern for reliable event delivery, and a double-entry ledger for financial tracking.
 
 ## Architecture
 
@@ -12,7 +12,7 @@ graph TD
 
     subgraph Hosting
         Vercel["Vercel<br/>(web)"]
-        Render["Render<br/>(api + db)"]
+        Render["Render<br/>(api + db + redis)"]
     end
 
     subgraph API["Express 5 API"]
@@ -22,6 +22,25 @@ graph TD
         Orders["Orders<br/>create → fulfill → refund"]
         Payments["Payments<br/>Stripe PI + webhook"]
         Images["Images<br/>Cloudinary upload"]
+        Promotions["Promotions<br/>discount codes"]
+        LedgerAPI["Ledger<br/>balance + entries"]
+    end
+
+    subgraph Worker["BullMQ Worker"]
+        OutboxDisp["Outbox Dispatcher<br/>poll → enqueue → sent"]
+        OrderWorker["Order Events<br/>ledger entries"]
+        EmailWorker["Emails"]
+        ReconWorker["Reconciliation"]
+        WebhookRetry["Webhook Retry"]
+        InventorySweep["Inventory Sweep"]
+    end
+
+    subgraph Queues["BullMQ Queues (Redis)"]
+        Q1["order-events"]
+        Q2["emails"]
+        Q3["reconciliation"]
+        Q4["webhooks-retry"]
+        Q5["inventory-sweep"]
     end
 
     subgraph Data
@@ -44,6 +63,10 @@ graph TD
     API --> Cloudinary
     API --> Stripe
     API --> Shared
+    API -->|"Outbox rows"| PG
+    Worker -->|"poll outbox"| PG
+    Worker -->|"enqueue + process"| Queues
+    Worker -->|"write ledger"| PG
     Web --> Shared
 ```
 
@@ -54,14 +77,25 @@ graph TD
 | Monorepo | npm workspaces |
 | Web | Next.js 16 + React 19 + Tailwind v4 |
 | API | Express 5 + TypeScript |
+| Background jobs | BullMQ v5 + Redis |
 | Database | Postgres 16 + Prisma 7 (PG adapter) |
-| Cache | Redis 7 + ioredis |
+| Cache / Sessions | Redis 7 + ioredis |
 | Auth | argon2id + JWT in httpOnly cookie |
 | Payments | Stripe PaymentIntents + signed webhooks |
 | Images | Cloudinary server-side upload |
 | Validation | Zod v4 + OpenAPI generation |
 | Testing | Vitest + Testcontainers |
 | CI | GitHub Actions |
+
+## Key patterns
+
+**Outbox pattern** — Business state changes write an `Outbox` row in the same Prisma `$transaction` as the data mutation. The worker's outbox dispatcher polls for `PENDING` rows, enqueues them into BullMQ queues, and marks them `SENT`. This guarantees at-least-once event delivery without distributed transactions.
+
+**Double-entry ledger** — Every payment and refund writes paired `DEBIT`/`CREDIT` entries across accounts (`CASH`, `REVENUE`, `REFUNDS`, `FEES`, `TAX`). The admin dashboard surfaces a balance summary and paginated entry list. Idempotent via `outboxId` deduplication.
+
+**Idempotency** — `POST /orders` and `POST /payments/intent` accept an `Idempotency-Key` header. Redis `SET NX` provides atomic claim on the hot path, with a Postgres fallback when Redis is unavailable. The frontend generates keys from a cart fingerprint stored in `sessionStorage`.
+
+**CSRF protection** — All mutating requests require `X-Requested-With: fetch`, automatically added by the shared `apiClient`. The Stripe webhook endpoint is excluded.
 
 ## Run locally in 60 seconds
 
@@ -95,11 +129,11 @@ docker compose up -d
 npm run db:migrate:dev
 npm run db:seed
 
-# 7. Start both services
+# 7. Start all services (web + api + worker)
 npm run dev
 ```
 
-API runs on [localhost:5000](http://localhost:5000). Web runs on [localhost:3000](http://localhost:3000).
+API runs on [localhost:5000](http://localhost:5000). Web runs on [localhost:3000](http://localhost:3000). Worker runs in the background.
 
 Seed creates an admin user (`admin@example.com` / `password123`) and sample products with images.
 
@@ -142,56 +176,70 @@ stripe trigger charge.refunded
 ## API overview
 
 ```
-GET    /health                 DB + Redis ping
-GET    /health/live            Liveness (no deps)
-GET    /health/readyz          Readiness (DB + Redis)
+GET    /health                       DB + Redis ping
+GET    /health/live                  Liveness (no deps)
+GET    /health/readyz                Readiness (DB + Redis)
 
-POST   /auth/signup            Rate-limited
-POST   /auth/signin            Rate-limited
+POST   /auth/signup                  Rate-limited
+POST   /auth/signin                  Rate-limited
 POST   /auth/signout
-POST   /auth/sign-out-all      Invalidate all sessions
+POST   /auth/sign-out-all            Invalidate all sessions
 GET    /auth/me
-PATCH  /auth/me                Update profile
+PATCH  /auth/me                      Update profile
 POST   /auth/change-password
 
-GET    /addresses              List own
-POST   /addresses              Create
-PUT    /addresses/:id          Update own
-DELETE /addresses/:id          Delete own
+GET    /addresses                    List own
+POST   /addresses                    Create
+PUT    /addresses/:id                Update own
+DELETE /addresses/:id                Delete own
 
-GET    /categories             Public
+GET    /categories                   Public
 GET    /categories/slug/:slug
-POST   /categories             Admin
-PUT    /categories/:id         Admin
-DELETE /categories/:id         Admin
+POST   /categories                   Admin
+PUT    /categories/:id               Admin
+DELETE /categories/:id               Admin
 
-GET    /products               ?q, ?categoryId, ?cursor, ?limit
+GET    /products                     ?q, ?categoryId, ?cursor, ?limit
 GET    /products/slug/:slug
-POST   /products               Admin
-PUT    /products/:id           Admin
-DELETE /products/:id           Admin
+POST   /products                     Admin
+PUT    /products/:id                 Admin
+DELETE /products/:id                 Admin
 
-POST   /images/upload          Admin (multipart)
-DELETE /images                 Admin
+POST   /images/upload                Admin (multipart)
+DELETE /images                       Admin
 
 GET    /cart
 POST   /cart/items
 PATCH  /cart/items/:productId
 DELETE /cart/items/:productId
-DELETE /cart                   Clear
+DELETE /cart                         Clear
+POST   /cart/summary                 Pricing breakdown
 
-POST   /orders                 Create from cart (idempotent)
-GET    /orders                 List own (admin: ?scope=all)
+POST   /orders                       Create from cart (idempotent)
+GET    /orders                       List own (admin: ?scope=all)
 GET    /orders/:id
 POST   /orders/:id/cancel
-PATCH  /orders/:id/status      Admin
-POST   /orders/:id/refund      Admin
+PATCH  /orders/:id/status            Admin
+POST   /orders/:id/refund            Admin (Stripe refund)
+POST   /orders/:id/request-refund    Customer refund request
+GET    /orders/:id/refund-request    Get refund request status
+GET    /orders/refund-requests       Admin (list all)
+POST   /orders/refund-requests/:id/approve   Admin
+POST   /orders/refund-requests/:id/reject    Admin
 
-POST   /payments/intent        Create Stripe PaymentIntent (idempotent)
-POST   /payments/webhook       Stripe signed webhook
+POST   /payments/intent              Create Stripe PaymentIntent (idempotent)
+POST   /payments/webhook             Stripe signed webhook
 
-GET    /docs.json              OpenAPI spec
-GET    /docs                   Swagger UI
+POST   /promotions                   Admin
+GET    /promotions                   Admin
+PUT    /promotions/:id               Admin
+DELETE /promotions/:id               Admin
+
+GET    /admin/ledger                 Balance summary per account
+GET    /admin/ledger/entries         Paginated detail rows
+
+GET    /docs.json                    OpenAPI spec
+GET    /docs                         Swagger UI (admin-gated in prod)
 ```
 
 ## Project structure
@@ -199,45 +247,61 @@ GET    /docs                   Swagger UI
 ```
 ecomm/
   apps/
-    api/                       Express 5 API
+    api/                             Express 5 API
       src/
-        config/                Validated env loader
-        lib/                   Auth, cache (Redis), cloudinary, cookies, errors, jwt, logger, redis, stripe
-        middlewares/           Auth, CSRF, error handling, idempotency, validation, upload
-        modules/               Feature modules (health, auth, cart, orders, payments, ...)
-        jobs/                  Cron scripts (abandoned order sweeper)
-      test/                    Vitest + Testcontainers (unit + integration)
-    web/                       Next.js 16 App Router
-      app/                     Pages (public, auth, admin routes)
-      components/              UI components + payment integration
-      lib/                     Client utilities
-      hooks/                   React hooks (API mutation, idempotency, Stripe)
-      services/                API client, checkout orchestration
+        config/                      Validated env loader
+        lib/                         Auth, cache (Redis), cloudinary, cookies, errors, jwt, logger, redis, stripe, openapi
+        middlewares/                 Auth, CSRF, error handling, idempotency, validation, upload
+        modules/                     Feature modules (health, auth, categories, products, images, cart, orders, payments, promotions, ledger)
+        jobs/                        Cron scripts (abandoned order sweeper, idempotency key promoter)
+    web/                             Next.js 16 App Router
+      app/                           Pages (public, auth, admin routes)
+      components/                    UI components + payment integration
+      lib/                           Client utilities
+      hooks/                         React hooks (API mutation, idempotency, Stripe)
+      services/                      API client, checkout orchestration
+      constants/                     Order status labels, styles, timeline
+    worker/                          BullMQ background processor
+      src/
+        outbox-dispatcher.ts         Polls Outbox → enqueues to BullMQ → marks SENT
+        queues/                      5 queues: order-events, emails, reconciliation, webhooks-retry, inventory-sweep
+        workers/                     Per-queue workers (ledger entries, email stubs, reconciliation stubs, retry stubs)
   packages/
-    db/                        Prisma 7 schema, migrations, seed, singleton client
-    shared/                    Zod schemas, money helpers, enums, error codes, pricing
-  docker-compose.yml           Postgres 16 + Redis 7 + optional build profile for api/web
-  render.yaml                  Render Blueprint
+    db/                              Prisma 7 schema, migrations, seed, singleton client
+    shared/                          Zod schemas, money helpers, enums, error codes, pricing engine
+  docker-compose.yml                 Postgres 16 + Redis 7 + optional build profile for api/web/worker
+  render.yaml                        Render Blueprint
 ```
 
 ## Available scripts
 
 ```bash
-npm run dev              # Start web + api concurrently
-npm run dev:api          # API only
+npm run dev              # Start web + api + worker concurrently
 npm run dev:web          # Web only
+npm run dev:api          # API only
+npm run dev:worker       # Worker only
 
+npm run build            # Build everything (packages → api → web → worker)
+npm run build:web        # Build web only
+npm run build:api        # Build API only
+npm run build:worker     # Build worker only
+
+npm run start:web        # Start production web server
+npm run start:api        # Start production API server
+npm run start:worker     # Start production worker
+
+npm run db:generate      # Regenerate Prisma client
 npm run db:migrate:dev   # Create and apply a migration (-- --name <name>)
 npm run db:migrate:deploy# Apply pending migrations (production)
 npm run db:seed          # Seed the database
 npm run db:studio        # Open Prisma Studio
 
-npm run test             # Run all API tests
+npm run test             # Run all API tests (unit + integration)
 npm run test:watch       # Watch mode
-npm run typecheck        # Type-check both apps
+npm run typecheck        # Type-check all workspaces (api, web, worker)
 
-npm run build            # Build everything (packages → api → web)
 npm run job:sweep        # Cancel abandoned PENDING orders (>30 min)
+npm run job:promote-idempotency  # Promote Redis idempotency keys to Postgres
 ```
 
 ## Testing
@@ -256,7 +320,7 @@ CI runs lint → typecheck → test → build on every push and PR via GitHub Ac
 
 ## Deployment
 
-**API + Database:** [Render Blueprint](render.yaml) provisions a managed Postgres instance, a Redis instance, and the Express API web service. Apply from the Render dashboard → New → Blueprint.
+**API + Database + Redis:** [Render Blueprint](render.yaml) provisions a managed Postgres instance, a Redis instance, and the Express API web service. Apply from the Render dashboard → New → Blueprint.
 
 After first deploy, set these env vars in the `ecomm-api` service:
 - `JWT_SECRET` (auto-generated)
@@ -266,9 +330,12 @@ After first deploy, set these env vars in the `ecomm-api` service:
 - `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET`
 - `COOKIE_SECURE=true`, `COOKIE_SAMESITE=none`
 
+**Worker:** Deploy as a separate Render background worker service (or alongside the API in a containerized setup). Requires `DATABASE_URL` and `REDIS_URL`. The worker runs the outbox dispatcher and all five BullMQ workers.
+
 **Web:** Deploy to Vercel. Set `NEXT_PUBLIC_*` env vars in the Vercel dashboard before the first build — they are inlined into the client bundle at build time.
 
 **Production checklist:**
 - [ ] Set up Stripe webhook pointing at `https://<api-domain>/payments/webhook` with events `payment_intent.succeeded`, `payment_intent.payment_failed`, and `charge.refunded`
 - [ ] Set up a Render Cron job calling `npm run job:sweep` every 5 minutes to clean up abandoned orders
+- [ ] Deploy the worker service (outbox dispatcher + BullMQ workers) for ledger entries and event processing
 - [ ] Enable branch protection on `main` requiring CI status checks
