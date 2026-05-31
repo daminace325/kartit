@@ -5,7 +5,7 @@ import type {
     SignupInput,
     UpdateProfileInput,
 } from "@repo/shared";
-import { ErrorCode } from "@repo/shared";
+import { ErrorCode, UserRole } from "@repo/shared";
 import { AppError } from "../../lib/errors";
 import { hashPassword, verifyPassword } from "../../lib/password";
 import { signToken } from "../../lib/jwt";
@@ -15,7 +15,7 @@ const toPublicUser = (u: {
     id: string;
     email: string;
     name: string | null;
-    role: "CUSTOMER" | "ADMIN";
+    role: UserRole;
     tokenVersion: number;
 }) => ({
     id: u.id,

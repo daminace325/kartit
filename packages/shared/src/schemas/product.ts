@@ -9,7 +9,7 @@ const slug = z
 // One image attached to a product (Cloudinary-hosted).
 // `position` is assigned server-side from the array index, so the client
 // just submits images in the order it wants them displayed.
-export const productImageInputSchema = z.object({
+const productImageInputSchema = z.object({
     url: z.url(),
     publicId: z.string().min(1).max(200),
     alt: z.string().max(200).optional(),

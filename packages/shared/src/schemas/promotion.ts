@@ -26,10 +26,10 @@ export type PromotionCreateInput = z.infer<typeof promotionCreateSchema>;
 export const promotionUpdateSchema = promotionCreateSchema.partial().omit({ code: true });
 export type PromotionUpdateInput = z.infer<typeof promotionUpdateSchema>;
 
-export const promotionValidateSchema = z.object({
+const promotionValidateSchema = z.object({
     code: z.string().min(1),
 });
-export type PromotionValidateInput = z.infer<typeof promotionValidateSchema>;
+type PromotionValidateInput = z.infer<typeof promotionValidateSchema>;
 
 export type PromotionDTO = {
     id: string;

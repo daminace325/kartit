@@ -12,7 +12,7 @@ export const PASSWORD_MIN_LENGTH = 8;
 
 export const PASSWORD_RULES_TEXT = `At least ${PASSWORD_MIN_LENGTH} characters.`;
 
-export type SessionUser = {
+type SessionUser = {
     id: string;
     email: string;
     name: string | null;

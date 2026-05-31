@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { UserRole } from "@repo/shared";
 import { makeApp, request, cleanDb, createTestUser } from "../helpers";
 
 let app = makeApp();
@@ -19,7 +20,7 @@ describe("POST /auth/signup", () => {
         expect(res.body.user).toMatchObject({
             email: "new@example.com",
             name: "New",
-            role: "CUSTOMER",
+            role: UserRole.CUSTOMER,
         });
         expect(res.headers["set-cookie"]).toBeDefined();
     });

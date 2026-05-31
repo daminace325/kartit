@@ -42,11 +42,13 @@ if (COOKIE_SAMESITE === "none" && !COOKIE_SECURE) {
 const WEB_ORIGINS = parseOrigins(process.env.WEB_ORIGINS ?? process.env.WEB_ORIGIN);
 if (WEB_ORIGINS.length === 0) WEB_ORIGINS.push("http://localhost:3000");
 
+// Fast-fail: validate DATABASE_URL is set at startup even though no code reads
+// env.DATABASE_URL directly (Prisma reads process.env.DATABASE_URL).
+required("DATABASE_URL");
+
 export const env = {
-    NODE_ENV,
     isProd,
     PORT: Number(process.env.PORT) || 5000,
-    DATABASE_URL: required("DATABASE_URL"),
 
     JWT_SECRET,
     JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN ?? "7d",

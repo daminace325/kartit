@@ -62,7 +62,7 @@ export const ALLOWED_TRANSITIONS: Record<OrderStatus, ReadonlySet<OrderStatus>> 
         ]),
     ) as unknown as Record<OrderStatus, ReadonlySet<OrderStatus>>;
 
-export function toItemDTO(item: OrderWithItems["items"][number]): OrderItemDTO {
+function toItemDTO(item: OrderWithItems["items"][number]): OrderItemDTO {
     return {
         id: item.id,
         productId: item.productId,

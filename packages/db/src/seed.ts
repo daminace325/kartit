@@ -27,7 +27,7 @@ import * as dotenv from "dotenv";
 // matter the cwd. Order: monorepo root .env → apps/api/.env → local cwd.
 // `override: false` (the default) means earlier files win on conflicts.
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
-import { cloudinaryBaseUrl } from "@repo/shared";
+import { cloudinaryBaseUrl, UserRole } from "@repo/shared";
 dotenv.config({ path: path.resolve(__dirname, "../../../apps/api/.env") });
 dotenv.config();
 
@@ -49,7 +49,7 @@ const USERS = [
     email: "damin@test.com",
     password: "damin123",
     name: "Damin",
-    role: "CUSTOMER" as const,
+    role: UserRole.CUSTOMER,
   },
 ];
 

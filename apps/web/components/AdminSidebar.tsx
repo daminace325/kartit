@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, FolderTree, ShoppingBag, Home, Tag } from "lucide-react";
+import { LayoutDashboard, Package, FolderTree, ShoppingBag, Home, Tag, Undo2 } from "lucide-react";
 import SignOutButton from "@/components/SignOutButton";
 
 type AdminSidebarProps = {
@@ -15,6 +15,7 @@ const navItems = [
     { href: "/admin/categories", icon: FolderTree, label: "Categories" },
     { href: "/admin/orders", icon: ShoppingBag, label: "Orders" },
     { href: "/admin/promotions", icon: Tag, label: "Promotions" },
+    { href: "/admin/refund-requests", icon: Undo2, label: "Refund Requests" },
 ];
 
 export default function AdminSidebar({ user }: AdminSidebarProps) {
