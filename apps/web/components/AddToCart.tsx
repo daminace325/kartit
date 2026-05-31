@@ -94,10 +94,10 @@ export default function AddToCart({
                 className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-sky-500 px-4 py-3 font-medium text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
                 {added ? (
-                    <span aria-live="polite">
+                    <>
                         <Check className="h-5 w-5" />
                         Added to cart
-                    </span>
+                    </>
                 ) : (
                     <>
                         <ShoppingCart className="h-5 w-5" />

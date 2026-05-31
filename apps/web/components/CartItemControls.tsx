@@ -25,7 +25,9 @@ export default function CartItemControls({ productId, qty, stock }: Props) {
         if (newQty === optimisticQty) return;
         clearError();
 
-        addOptimistic(newQty);
+        startTransition(() => {
+            addOptimistic(newQty);
+        });
 
         const result = await execute(
             `/cart/items/${encodeURIComponent(productId)}`,
