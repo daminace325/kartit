@@ -99,7 +99,7 @@ export const authService = {
             });
         });
         const token = signToken({ sub: updated.id, role: updated.role, tv: updated.tokenVersion });
-        userCache.del(userId);
+        await userCache.del(userId);
         return { user: toPublicUser(updated), token };
     },
 
@@ -117,6 +117,6 @@ export const authService = {
             where: { id: userId },
             data: { tokenVersion: { increment: 1 } },
         });
-        userCache.del(userId);
+        await userCache.del(userId);
     },
 };

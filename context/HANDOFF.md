@@ -110,7 +110,8 @@ ecomm/
                                    SameSite=none ⇒ Secure check, multi-origin CORS)
         lib/
           asyncHandler.ts        ← async request handler wrapper (try/catch → next(err))
-          cache.ts               ← TtlCache (in-process LRU for requireAuth hot path)
+          cache.ts               ← TtlCache (Redis-backed; graceful fallback on Redis errors)
+          redis.ts               ← ioredis client singleton (lazyConnect, retry strategy)
           cloudinary.ts          ← uploadBufferToCloudinary + destroyByPublicIds
           cookies.ts             ← setAuthCookie / clearAuthCookie (httpOnly)
           errors.ts              ← AppError class with static factories
@@ -209,9 +210,9 @@ ecomm/
 
 ## Env files (real values, not committed)
 
-- `ecomm/.env` — `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL` (compose + Prisma CLI)
+- `ecomm/.env` — `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL`, `REDIS_URL` (compose + Prisma CLI)
 - `ecomm/.env.example` — template for the above
-- `ecomm/apps/api/.env` — `PORT=5000`, `DATABASE_URL`, `JWT_SECRET` (≥32 chars), `JWT_EXPIRES_IN=7d`, `COOKIE_NAME=ecomm_auth`, `COOKIE_SECURE`, `COOKIE_SAMESITE` (`lax`/`strict`/`none`; `none` requires Secure), `WEB_ORIGINS` (comma-separated; supports single-`*` host wildcards like `https://*.vercel.app`), `CLOUDINARY_CLOUD_NAME`/`API_KEY`/`API_SECRET`/`FOLDER`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CURRENCY=USD`
+- `ecomm/apps/api/.env` — `PORT=5000`, `DATABASE_URL`, `REDIS_URL=redis://localhost:6379`, `JWT_SECRET` (≥32 chars), `JWT_EXPIRES_IN=7d`, `COOKIE_NAME=ecomm_auth`, `COOKIE_SECURE`, `COOKIE_SAMESITE` (`lax`/`strict`/`none`; `none` requires Secure), `WEB_ORIGINS` (comma-separated; supports single-`*` host wildcards like `https://*.vercel.app`), `CLOUDINARY_CLOUD_NAME`/`API_KEY`/`API_SECRET`/`FOLDER`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CURRENCY=USD`
 - `ecomm/apps/api/.env.example` — template for the above
 - `ecomm/apps/web/.env.local` — `NEXT_PUBLIC_API_URL=http://localhost:5000`, `NEXT_PUBLIC_AUTH_COOKIE_NAME=ecomm_auth`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`
 - `ecomm/apps/web/.env.example` — template for the above
@@ -233,7 +234,7 @@ ecomm/
 - **Migration command:** `npm run db:migrate:dev -- --name <name>` from root (or directly in `packages/db`).
 - **`migrate dev` auto-runs `generate`** — don't run generate separately unless after a fresh `npm install`.
 - **Render deploy:** start command runs `db:migrate:deploy && db:seed && start:api`. Seed must be idempotent.
-- **Health probes:** `/health/live` (no DB — Render uses this) vs `/health` (DB ping — manual/monitoring).
+- **Health probes:** `/health/live` (no deps — Render uses this) vs `/health` and `/health/readyz` (DB + Redis ping — monitoring/traffic gating).
 
 ## Useful commands
 
@@ -286,8 +287,9 @@ cd ecomm; npm install -D <pkg> -w apps/web
 
 ```
 GET    /                       { message: "API is running" }
-GET    /health                 DB ping
-GET    /health/live            liveness (Render)
+GET    /health                 DB + Redis ping
+GET    /health/live            liveness (Render — no deps)
+GET    /health/readyz          readiness (DB + Redis, for traffic gating)
 
 POST   /auth/signup            (rate-limited)
 POST   /auth/signin            (rate-limited)
@@ -453,11 +455,11 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 - Migration `20260514174237_citext_email_case_folding`: creates `citext` extension, alters `email` to `CITEXT` type.
 - Removed three `.toLowerCase()` calls in [auth.service.ts](apps/api/src/modules/auth/auth.service.ts) (signup lookup, signup create, signin lookup) — the DB handles case folding now.
 
-#### 1.12 — Hot-path `requireAuth` cache (in-process TTL) ✅ DONE
-- Created [cache.ts](apps/api/src/lib/cache.ts) — simple `TtlCache` backed by `Map` with per-key expiry. Exports `userCache` singleton typing `{ id, role, tokenVersion }`.
+#### 1.12 — Hot-path `requireAuth` cache ✅ DONE (migrated to Redis in 2.1)
+- [cache.ts](apps/api/src/lib/cache.ts) — `TtlCache` class (originally in-process `Map`, now Redis-backed). Exports `userCache` singleton typing `{ id, role, tokenVersion }`.
 - [requireAuth.ts](apps/api/src/middlewares/requireAuth.ts): on cache hit with matching `tokenVersion`, skips the DB round-trip entirely. On miss, queries DB and populates cache (60s TTL).
-- Cache invalidation in [auth.service.ts](apps/api/src/modules/auth/auth.service.ts): `userCache.del(userId)` after `changePassword` and `signOutAll` (both bump `tokenVersion`).
-- P2 swaps `TtlCache` for Redis — the `get/set/del` interface stays identical.
+- Cache invalidation in [auth.service.ts](apps/api/src/modules/auth/auth.service.ts): `await userCache.del(userId)` after `changePassword` and `signOutAll`.
+- Methods are async (`get`, `set`, `del` return Promises). Graceful fallback on Redis errors (get → undefined, set/del → log warning).
 
 #### 1.13 — Split order creation from payment intent ✅ DONE
 - **`POST /orders`** now only creates the PENDING order + deducts stock + clears cart. Returns `{ order }` without a client secret. The Payment row is created with `providerPaymentId: null`.
@@ -652,11 +654,13 @@ Items are grouped by tier (S = correctness/money-safety; A = polish that visibly
 
 Each item is **additive** to Phase 1 — no rewrites of business logic.
 
-### 2.1 — Redis foundation
-- Add Redis service to `docker-compose.yml`.
-- `ioredis` client singleton in `apps/api/src/lib/redis.ts`.
-- `/health` upgraded to also ping Redis; `/readyz` requires both.
-- Migrate the LRU cache from 1.12 to Redis.
+### 2.1 — Redis foundation ✅ DONE
+- **Redis service:** `redis:7-alpine` added to `docker-compose.yml` with AOF persistence (`--save 60 1`) and healthcheck.
+- **Client:** `ioredis` singleton in `apps/api/src/lib/redis.ts` with retry strategy (max 10 retries, exponential backoff), `lazyConnect: true` so startup doesn't crash when Redis is unavailable.
+- **Cache migration:** `apps/api/src/lib/cache.ts` — `TtlCache` now backed by Redis (`SET key value PX ttlMs` / `GET` / `DEL`). Same class name and interface, but methods are now async. Falls back gracefully on Redis errors (get returns undefined, set/del log warning).
+- **Cache callers updated:** `requireAuth.ts` and `auth.service.ts` — all `userCache.get/set/del` calls now use `await`.
+- **Health:** `/health` now pings both DB and Redis. `/health/readyz` (new) requires both DB + Redis for orchestrator traffic gating. `/health/live` unchanged (no deps).
+- **Env:** `REDIS_URL=redis://localhost:6379` added to root `.env.example`, `apps/api/.env.example`, `docker-compose.yml` api service, and `env.ts`.
 
 ### 2.2 — Idempotency middleware moved to Redis hot path
 - The `IdempotencyKey` Postgres table from 1.1 stays as a durable fallback.

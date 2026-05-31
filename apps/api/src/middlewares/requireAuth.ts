@@ -30,7 +30,7 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     }
 
     try {
-        const cached = userCache.get(payload.sub);
+        const cached = await userCache.get(payload.sub);
         if (cached && cached.tokenVersion === payload.tv) {
             req.user = { id: cached.id, role: cached.role as UserRole };
             return next();
@@ -41,20 +41,20 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
             select: { id: true, role: true, tokenVersion: true },
         });
         if (!user) {
-            userCache.del(payload.sub);
+            await userCache.del(payload.sub);
             clearAuthCookie(res);
             return next(
                 AppError.unauthorized(ErrorCode.SESSION_INVALID, "Session is no longer valid"),
             );
         }
         if (payload.tv !== user.tokenVersion) {
-            userCache.del(payload.sub);
+            await userCache.del(payload.sub);
             clearAuthCookie(res);
             return next(
                 AppError.unauthorized(ErrorCode.SESSION_INVALID, "Session has been invalidated"),
             );
         }
-        userCache.set(payload.sub, {
+        await userCache.set(payload.sub, {
             id: user.id,
             role: user.role,
             tokenVersion: user.tokenVersion,

@@ -46,6 +46,8 @@ if (WEB_ORIGINS.length === 0) WEB_ORIGINS.push("http://localhost:3000");
 // env.DATABASE_URL directly (Prisma reads process.env.DATABASE_URL).
 required("DATABASE_URL");
 
+const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
+
 export const env = {
     isProd,
     PORT: Number(process.env.PORT) || 5000,
@@ -67,4 +69,6 @@ export const env = {
     STRIPE_SECRET_KEY: requireInProd("STRIPE_SECRET_KEY"),
     STRIPE_WEBHOOK_SECRET: requireInProd("STRIPE_WEBHOOK_SECRET"),
     STRIPE_CURRENCY: (process.env.STRIPE_CURRENCY ?? "USD").toUpperCase(),
+
+    REDIS_URL,
 };

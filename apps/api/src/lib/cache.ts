@@ -1,27 +1,42 @@
-// In-process TTL cache — simple Map-backed store with per-key expiry.
-// P2 swaps this for Redis; the interface (get/set/del) stays the same.
+// Redis-backed TTL cache. P2 swaps the in-process Map for Redis;
+// the interface (get/set/del) stays the same but is now async.
+// Falls back gracefully when Redis is unavailable (cache miss / no-op).
 
-type Entry<T> = { value: T; expiresAt: number };
+import { redis } from "./redis";
+import { logger } from "./logger";
 
 class TtlCache<T> {
-    private store = new Map<string, Entry<T>>();
+    private prefix: string;
 
-    get(key: string): T | undefined {
-        const entry = this.store.get(key);
-        if (!entry) return undefined;
-        if (Date.now() > entry.expiresAt) {
-            this.store.delete(key);
+    constructor(prefix: string) {
+        this.prefix = prefix;
+    }
+
+    async get(key: string): Promise<T | undefined> {
+        try {
+            const raw = await redis.get(`${this.prefix}:${key}`);
+            if (!raw) return undefined;
+            return JSON.parse(raw) as T;
+        } catch (err) {
+            logger.warn(`[cache] get failed for ${this.prefix}:${key}: ${err instanceof Error ? err.message : err}`);
             return undefined;
         }
-        return entry.value;
     }
 
-    set(key: string, value: T, ttlMs: number): void {
-        this.store.set(key, { value, expiresAt: Date.now() + ttlMs });
+    async set(key: string, value: T, ttlMs: number): Promise<void> {
+        try {
+            await redis.set(`${this.prefix}:${key}`, JSON.stringify(value), "PX", ttlMs);
+        } catch (err) {
+            logger.warn(`[cache] set failed for ${this.prefix}:${key}: ${err instanceof Error ? err.message : err}`);
+        }
     }
 
-    del(key: string): void {
-        this.store.delete(key);
+    async del(key: string): Promise<void> {
+        try {
+            await redis.del(`${this.prefix}:${key}`);
+        } catch (err) {
+            logger.warn(`[cache] del failed for ${this.prefix}:${key}: ${err instanceof Error ? err.message : err}`);
+        }
     }
 }
 
@@ -31,4 +46,4 @@ interface CachedUser {
     tokenVersion: number;
 }
 
-export const userCache = new TtlCache<CachedUser>();
+export const userCache = new TtlCache<CachedUser>("cache:user");
