@@ -73,6 +73,7 @@ Models:
 - **`Payment`** — orderId (cascade), providerPaymentId? (unique — Stripe PaymentIntent id), status, amountMinor, currency, failureReason?
 - **`IdempotencyKey`** — userId+key unique, requestHash, status, cached response, expiresAt *(P1.1 implemented, P2.2 Redis hot path)*
 - **`Outbox`** — aggregateType, aggregateId, eventType, payload (Json), status (`PENDING`|`SENT`|`FAILED`), attempts, lastError, createdAt, sentAt? *(P2.3 — outbox pattern)*
+- **`LedgerEntry`** — account, direction (`DEBIT`|`CREDIT`), amountMinor (BigInt), orderId?, paymentId?, reference?, memo?, createdAt *(P2.4 — double-entry ledger)*
 
 Enums:
 
@@ -80,6 +81,7 @@ Enums:
 - **`OrderStatus`** — `PENDING`, `PAID`, `PROCESSING`, `SHIPPED`, `DELIVERED`, `CANCELLED`, `FAILED`, `REFUNDED` *(expanded from the original 5 to support fulfillment lifecycle in 1.7)*
 - **`PaymentStatus`** — `REQUIRES_PAYMENT`, `SUCCEEDED`, `FAILED`, `REFUNDED`
 - **`OutboxStatus`** — `PENDING`, `SENT`, `FAILED` *(P2.3)*
+- **`LedgerDirection`** — `DEBIT`, `CREDIT` *(P2.4)*
 
 Money everywhere as `BigInt` minor units, currency `Char(3)`. Never floats.
 
@@ -91,6 +93,7 @@ Money everywhere as `BigInt` minor units, currency `Char(3)`. Never floats.
 - `20260512000000_session_invalidation` — User.tokenVersion
 - `20260514174237_citext_email_case_folding` — citext extension + email type change
 - `20260531105522_outbox_pattern` — Outbox model + OutboxStatus enum (P2.3)
+- `20260531124703_ledger` — LedgerEntry model + LedgerDirection enum (P2.4)
 
 ## File structure
 
@@ -144,6 +147,7 @@ ecomm/
                                     orders.{routes,controller,service}.ts +
                                     orders.payment.service.ts + orders.status.service.ts
           payments/              ← /payments/webhook (raw body), /payments/intent (create PI for order)
+          ledger/                ← GET /admin/ledger (balance summary) + /admin/ledger/entries (paginated detail)
         app.ts                   ← createApp(): trust-proxy, helmet, multi-origin CORS,
                                    /payments mounted BEFORE express.json() (raw webhook),
                                    auth rate-limit, all routers
@@ -260,7 +264,7 @@ ecomm/
 - **CORS:** `WEB_ORIGINS` (plural) is the env var. Each entry is exact origin or single-`*`-host wildcard. Compiled into matchers once at boot.
 - **`trust proxy: 1`** is set so Render's LB gives correct `req.secure` / `req.ip` and the `Secure` cookie attribute behaves.
 - **Auth rate-limit:** 30 req / 15 min on `/auth/signin` + `/auth/signup` (`express-rate-limit`, draft-7 headers).
-- **P2 schema progress:** `Outbox` ✅ (2.3). Remaining P2: `LedgerEntry` (2.4), `RefreshToken` rotation family (2.12), `Reservation` (2.7).
+- **P2 schema progress:** `Outbox` ✅ (2.3), `LedgerEntry` ✅ (2.4). Remaining P2: `RefreshToken` rotation family (2.12), `Reservation` (2.7).
 - **Repo polish gotcha:** `.gitignore` currently ignores `.editorconfig`. `context/` is commented out in `.gitignore` (committed). If this repo is going to GitHub for resume review, stop ignoring `.editorconfig`.
 - **Migration command:** `npm run db:migrate:dev -- --name <name>` from root (or directly in `packages/db`).
 - **`migrate dev` auto-runs `generate`** — don't run generate separately unless after a fresh `npm install`.
@@ -268,6 +272,7 @@ ecomm/
 - **Health probes:** `/health/live` (no deps — Render uses this) vs `/health` and `/health/readyz` (DB + Redis ping — monitoring/traffic gating).
 - **Outbox pattern (P2.3):** Order/payment services write to `Outbox` in the same `$transaction` as business state changes — guarantees atomicity. A separate `apps/worker` process runs the outbox dispatcher (polls PENDING → enqueues to BullMQ) + 5 BullMQ workers. At-least-once delivery; workers must be idempotent. Workers currently log-only — P2.4 (ledger), P2.5 (reconciliation), P2.15 (emails) will wire real side effects.
 - **Worker Redis:** BullMQ uses URL-based connection (`{ url: REDIS_URL }`), not an ioredis instance — avoids type conflicts with BullMQ's bundled ioredis version.
+- **Ledger balance convention (P2.4):** Asset/expense accounts (CASH, REFUNDS, FEES) show balance as `DEBIT − CREDIT` (money in = balance up). Revenue accounts (REVENUE) show `CREDIT − DEBIT` (revenue earned = balance up). This matches standard accounting: debit increases assets, credit increases liabilities/revenue.
 
 ## Useful commands
 
@@ -371,6 +376,9 @@ POST   /orders/:id/refund      (admin: calls Stripe, returns 202 with refundId)
 
 POST   /payments/intent        (create Stripe PI for order, idempotent, rate-limited)
 POST   /payments/webhook       Stripe signed webhook (raw body) → handles succeeded, failed, refunded
+
+GET    /admin/ledger            (admin) — balance summary per account (?startDate, ?endDate)
+GET    /admin/ledger/entries    (admin) — paginated detail rows (?account, ?startDate, ?endDate, ?cursor, ?limit)
 ```
 
 ---
@@ -722,11 +730,18 @@ Each item is **additive** to Phase 1 — no rewrites of business logic.
 - **Dockerfile:** `apps/worker/Dockerfile` (multi-stage, non-root, same pattern as API).
 - **Commands:** `npm run dev:worker`, `npm run build:worker`, `npm run start:worker`.
 
-### 2.4 — Double-entry ledger
-- New schema: `LedgerEntry { account, direction: DEBIT|CREDIT, amountMinor BigInt, currency, orderId?, paymentId?, reference?, memo?, createdAt }`.
-- Stripe webhook handler writes entries on `PAID` / `REFUND` (CASH ↔ REVENUE / REFUNDS / FEES / TAX).
-- Admin endpoint `GET /admin/ledger` shows balance per account per currency.
-- Constraint: `sum(debits) === sum(credits)` per `(currency, transaction batch)`. Daily integrity check.
+### 2.4 — Double-entry ledger ✅ DONE
+- New schema: `LedgerEntry { account, direction: DEBIT|CREDIT, amountMinor BigInt, orderId?, paymentId?, reference?, memo?, createdAt }` — uses plain string refs (not formal Prisma relations) to avoid coupling Order/Payment models and support manual adjustments.
+- `order-events.worker.ts` writes paired ledger entries on `OrderPaid` (CASH DEBIT + REVENUE CREDIT) and `OrderRefunded` (REFUNDS DEBIT + CASH CREDIT) — idempotent via outbox ID dedup.
+- Admin endpoint `GET /admin/ledger` returns per-account balance summary with total debits/credits; `GET /admin/ledger/entries` returns paginated detail rows.
+- Balance convention: asset/expense accounts (CASH, REFUNDS, FEES) → DEBIT − CREDIT; revenue accounts (REVENUE) → CREDIT − DEBIT.
+- **Migration:** `20260531124703_ledger`
+- **Integration points:**
+  - Schema: `LedgerDirection` enum + `LedgerEntry` model in `packages/db/prisma/schema.prisma`
+  - Worker: `apps/worker/src/workers/order-events.worker.ts` — `writeLedgerEntries()` called from `OrderPaid` and `OrderRefunded` handlers
+  - API: `apps/api/src/modules/ledger/ledger.{routes,controller,service}.ts`
+  - Outbox payloads: `providerPaymentId` added to `OrderPaid`, `OrderPaymentFailed`, and `OrderRefunded` payloads in `orders.payment.service.ts`
+- **Constraint:** `sum(debits) === sum(credits)` per transaction batch — enforced at the application layer by writing both entries in a single `prisma.$transaction`. P2.5 will add daily integrity checks and Stripe fee tracking (CASH FEES DEBIT entries).
 
 ### 2.5 — Stripe reconciliation job
 - Nightly cron worker pulls Stripe `balance_transactions` (paginated, since last cursor).

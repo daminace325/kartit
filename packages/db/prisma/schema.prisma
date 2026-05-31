@@ -56,6 +56,11 @@ enum OutboxStatus {
   FAILED
 }
 
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
 // ─── Models ────────────────────────────────────────────────────────────
 
 model User {
@@ -347,4 +352,23 @@ model Outbox {
   sentAt        DateTime?
 
   @@index([status, createdAt])
+}
+
+// Double-entry ledger (P2.4) — every financial event writes paired DEBIT/CREDIT
+// entries so sum(debits) === sum(credits) for every transaction batch.
+// Uses plain string refs (not relations) to avoid coupling Order/Payment models
+// and to support entries without an associated order (e.g. manual adjustments).
+model LedgerEntry {
+  id          String          @id @default(cuid())
+  account     String          // CASH | REVENUE | REFUNDS | FEES | TAX
+  direction   LedgerDirection
+  amountMinor BigInt
+  orderId     String?         // FK-ish to Order.id (no formal relation — append-only audit log)
+  paymentId   String?         // FK-ish to Payment.id
+  reference   String?         // Stripe PaymentIntent / balance_transaction id
+  memo        String?
+  createdAt   DateTime        @default(now())
+
+  @@index([orderId])
+  @@index([account, createdAt])
 }

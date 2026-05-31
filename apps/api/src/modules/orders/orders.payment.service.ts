@@ -119,6 +119,7 @@ export const ordersPaymentService = {
                         totalMinor: order.totalMinor.toString(),
                         currency: order.currency,
                         userId: order.userId,
+                        providerPaymentId: payment.providerPaymentId,
                     },
                 },
             });
@@ -178,6 +179,7 @@ export const ordersPaymentService = {
                         totalMinor: order.totalMinor.toString(),
                         currency: order.currency,
                         userId: order.userId,
+                        providerPaymentId: payment.providerPaymentId,
                     },
                 },
             });
@@ -234,6 +236,7 @@ export const ordersPaymentService = {
                         totalMinor: order.totalMinor.toString(),
                         currency: order.currency,
                         userId: order.userId,
+                        providerPaymentId: payment.providerPaymentId,
                     },
                 },
             });
