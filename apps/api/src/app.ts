@@ -16,6 +16,7 @@ import { addressesRouter } from "./modules/addresses/addresses.routes";
 import { promotionsRouter } from "./modules/promotions/promotions.routes";
 import { docsRouter } from "./modules/docs/docs.routes";
 import { ledgerRouter } from "./modules/ledger/ledger.routes";
+import { reconciliationRouter } from "./modules/reconciliation/reconciliation.routes";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 import { csrfMiddleware } from "./middlewares/csrf";
 
@@ -127,6 +128,7 @@ export function createApp() {
     app.use("/addresses", addressesRouter);
     app.use("/promotions", promotionsRouter);
     app.use("/admin/ledger", ledgerRouter);
+    app.use("/admin/reconciliation", reconciliationRouter);
     app.use("/docs", docsRouter);
 
     app.use(notFoundHandler);

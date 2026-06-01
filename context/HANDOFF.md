@@ -74,6 +74,7 @@ Models:
 - **`IdempotencyKey`** — userId+key unique, requestHash, status, cached response, expiresAt *(P1.1 implemented, P2.2 Redis hot path)*
 - **`Outbox`** — aggregateType, aggregateId, eventType, payload (Json), status (`PENDING`|`SENT`|`FAILED`), attempts, lastError, createdAt, sentAt? *(P2.3 — outbox pattern)*
 - **`LedgerEntry`** — account, direction (`DEBIT`|`CREDIT`), amountMinor (BigInt), orderId?, paymentId?, reference?, memo?, createdAt *(P2.4 — double-entry ledger)*
+- **`ReconciliationReport`** — runAt, startCursor?, endCursor?, totalStripeAmount, totalLedgerAmount, driftMinor, transactionCount, matchedCount, mismatchedRefs (Json), createdAt *(P2.5 — Stripe reconciliation)*
 
 Enums:
 
@@ -94,6 +95,7 @@ Money everywhere as `BigInt` minor units, currency `Char(3)`. Never floats.
 - `20260514174237_citext_email_case_folding` — citext extension + email type change
 - `20260531105522_outbox_pattern` — Outbox model + OutboxStatus enum (P2.3)
 - `20260531124703_ledger` — LedgerEntry model + LedgerDirection enum (P2.4)
+- `20260601124439_reconciliation_report` — ReconciliationReport model (P2.5)
 
 ## File structure
 
@@ -148,6 +150,7 @@ ecomm/
                                     orders.payment.service.ts + orders.status.service.ts
           payments/              ← /payments/webhook (raw body), /payments/intent (create PI for order)
           ledger/                ← GET /admin/ledger (balance summary) + /admin/ledger/entries (paginated detail)
+          reconciliation/        ← GET /admin/reconciliation (list reports) + /admin/reconciliation/:id (detail) (P2.5)
         app.ts                   ← createApp(): trust-proxy, helmet, multi-origin CORS,
                                    /payments mounted BEFORE express.json() (raw webhook),
                                    auth rate-limit, all routers
@@ -204,9 +207,14 @@ ecomm/
           index.ts                ← barrel export of all workers
           order-events.worker.ts  ← processes OrderCreated/Paid/Cancelled/Refunded/Failed
           emails.worker.ts        ← processes email.* events (log-only for now)
-          reconciliation.worker.ts ← processes reconciliation.* + ledger.* events (log-only)
+          reconciliation.worker.ts ← processes reconciliation.* events — runs Stripe reconciliation (P2.5, wired)
           webhooks-retry.worker.ts ← processes webhook.* retries (log-only for now)
           inventory-sweep.worker.ts ← processes inventory.* sweep jobs (log-only for now)
+        lib/
+          stripe.ts                ← Stripe SDK singleton for worker (P2.5)
+          reconciliation.ts        ← `runReconciliation()` — pulls Stripe balance_transactions, matches against Payment/LedgerEntry by PI id, writes ReconciliationReport (P2.5)
+        jobs/
+          trigger-reconciliation.ts ← enqueues reconciliation.daily job (P2.5, nightly cron)
         outbox-dispatcher.ts      ← polls Outbox(PENDING) → enqueues to BullMQ → marks SENT
   packages/
     db/
@@ -249,7 +257,8 @@ ecomm/
 - `ecomm/apps/api/.env.example` — template for the above
 - `ecomm/apps/web/.env.local` — `NEXT_PUBLIC_API_URL=http://localhost:5000`, `NEXT_PUBLIC_AUTH_COOKIE_NAME=ecomm_auth`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`
 - `ecomm/apps/web/.env.example` — template for the above
-- `ecomm/apps/worker/.env` — `NODE_ENV=development`, `DATABASE_URL`, `REDIS_URL` (for `tsx watch` and `npm start`)
+- `ecomm/apps/worker/.env` — `NODE_ENV=development`, `DATABASE_URL`, `REDIS_URL`, `STRIPE_SECRET_KEY` (for `tsx watch`, `npm start`, and P2.5 reconciliation jobs)
+- `ecomm/apps/worker/.env.example` — template for the above
 - `ecomm/apps/worker/.env.example` — template for the above
 - `ecomm/packages/db/.env` — `DATABASE_URL` (separate, for Prisma CLI)
 
@@ -264,13 +273,13 @@ ecomm/
 - **CORS:** `WEB_ORIGINS` (plural) is the env var. Each entry is exact origin or single-`*`-host wildcard. Compiled into matchers once at boot.
 - **`trust proxy: 1`** is set so Render's LB gives correct `req.secure` / `req.ip` and the `Secure` cookie attribute behaves.
 - **Auth rate-limit:** 30 req / 15 min on `/auth/signin` + `/auth/signup` (`express-rate-limit`, draft-7 headers).
-- **P2 schema progress:** `Outbox` ✅ (2.3), `LedgerEntry` ✅ (2.4). Remaining P2: `RefreshToken` rotation family (2.12), `Reservation` (2.7).
+- **P2 schema progress:** `Outbox` ✅ (2.3), `LedgerEntry` ✅ (2.4), `ReconciliationReport` ✅ (2.5). Remaining P2: `RefreshToken` rotation family (2.12), `Reservation` (2.7).
 - **Repo polish gotcha:** `.gitignore` currently ignores `.editorconfig`. `context/` is commented out in `.gitignore` (committed). If this repo is going to GitHub for resume review, stop ignoring `.editorconfig`.
 - **Migration command:** `npm run db:migrate:dev -- --name <name>` from root (or directly in `packages/db`).
 - **`migrate dev` auto-runs `generate`** — don't run generate separately unless after a fresh `npm install`.
 - **Render deploy:** start command runs `db:migrate:deploy && db:seed && start:api`. Seed must be idempotent.
 - **Health probes:** `/health/live` (no deps — Render uses this) vs `/health` and `/health/readyz` (DB + Redis ping — monitoring/traffic gating).
-- **Outbox pattern (P2.3):** Order/payment services write to `Outbox` in the same `$transaction` as business state changes — guarantees atomicity. A separate `apps/worker` process runs the outbox dispatcher (polls PENDING → enqueues to BullMQ) + 5 BullMQ workers. At-least-once delivery; workers must be idempotent. Workers currently log-only — P2.4 (ledger), P2.5 (reconciliation), P2.15 (emails) will wire real side effects.
+- **Outbox pattern (P2.3):** Order/payment services write to `Outbox` in the same `$transaction` as business state changes — guarantees atomicity. A separate `apps/worker` process runs the outbox dispatcher (polls PENDING → enqueues to BullMQ) + 5 BullMQ workers. At-least-once delivery; workers must be idempotent. `order-events` worker writes ledger entries (P2.4). `reconciliation` worker runs Stripe reconciliation (P2.5). `emails`, `webhooks-retry`, `inventory-sweep` remain log-only (future P2 items).
 - **Worker Redis:** BullMQ uses URL-based connection (`{ url: REDIS_URL }`), not an ioredis instance — avoids type conflicts with BullMQ's bundled ioredis version.
 - **Ledger balance convention (P2.4):** Asset/expense accounts (CASH, REFUNDS, FEES) show balance as `DEBIT − CREDIT` (money in = balance up). Revenue accounts (REVENUE) show `CREDIT − DEBIT` (revenue earned = balance up). This matches standard accounting: debit increases assets, credit increases liabilities/revenue.
 
@@ -379,6 +388,9 @@ POST   /payments/webhook       Stripe signed webhook (raw body) → handles succ
 
 GET    /admin/ledger            (admin) — balance summary per account (?startDate, ?endDate)
 GET    /admin/ledger/entries    (admin) — paginated detail rows (?account, ?startDate, ?endDate, ?cursor, ?limit)
+
+GET    /admin/reconciliation     (admin) — list recent reconciliation reports (?limit)
+GET    /admin/reconciliation/:id (admin) — single reconciliation report detail
 ```
 
 ---
@@ -743,10 +755,15 @@ Each item is **additive** to Phase 1 — no rewrites of business logic.
   - Outbox payloads: `providerPaymentId` added to `OrderPaid`, `OrderPaymentFailed`, and `OrderRefunded` payloads in `orders.payment.service.ts`
 - **Constraint:** `sum(debits) === sum(credits)` per transaction batch — enforced at the application layer by writing both entries in a single `prisma.$transaction`. P2.5 will add daily integrity checks and Stripe fee tracking (CASH FEES DEBIT entries).
 
-### 2.5 — Stripe reconciliation job
-- Nightly cron worker pulls Stripe `balance_transactions` (paginated, since last cursor).
-- Joins against `LedgerEntry` by reference (charge id).
-- Writes a `ReconciliationReport { runAt, drift, mismatchedRefs[] }` row, alerts on `drift > 0`.
+### 2.5 — Stripe reconciliation job ✅ DONE
+- **Worker:** `apps/worker/src/lib/reconciliation.ts` — `runReconciliation()` pulls Stripe `balance_transactions` (paginated, since last report's `endCursor`), matches charge/refund transactions against our `Payment` records via Stripe PaymentIntent ID, compares `|bt.amount|` against `Payment.amountMinor`, and writes a `ReconciliationReport` row with drift and mismatched references.
+- **Trigger:** `apps/worker/src/jobs/trigger-reconciliation.ts` — enqueues `reconciliation.daily` into the reconciliation queue. Run as `npm run job:reconcile` (nightly cron).
+- **Worker:** `apps/worker/src/workers/reconciliation.worker.ts` — processes `reconciliation.daily` events by calling `runReconciliation()`. No longer log-only.
+- **Stripe client:** `apps/worker/src/lib/stripe.ts` — Stripe SDK singleton for the worker (API version `2026-05-27.dahlia`).
+- **API:** `apps/api/src/modules/reconciliation/` — `GET /admin/reconciliation` lists recent reports; `GET /admin/reconciliation/:id` returns a single report detail (admin-gated).
+- **Model:** `ReconciliationReport { runAt, startCursor?, endCursor?, totalStripeAmount, totalLedgerAmount, driftMinor, transactionCount, matchedCount, mismatchedRefs Json }`.
+- **Migration:** `20260601124439_reconciliation_report`
+- **Dependencies:** `stripe` added to `apps/worker/package.json`. Env: `STRIPE_SECRET_KEY` required by worker for reconciliation jobs.
 - Resume bullet: "balance drift <1¢ across 10k+ simulated transactions".
 
 ### 2.6 — Risk engine

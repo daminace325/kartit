@@ -372,3 +372,22 @@ model LedgerEntry {
   @@index([orderId])
   @@index([account, createdAt])
 }
+
+// Reconciliation report (P2.5) — stores results of nightly Stripe reconciliation
+// runs. Each run pulls Stripe balance_transactions since the last cursor and
+// compares against local LedgerEntry rows, reporting any drift.
+model ReconciliationReport {
+  id              String   @id @default(cuid())
+  runAt           DateTime @default(now())
+  startCursor     String?  // Stripe balance_transaction pagination cursor (last run's endCursor)
+  endCursor       String?  // Last cursor from this run (used as startCursor for next run)
+  totalStripeAmount  BigInt // sum of Stripe balance_transaction amounts for matched charges
+  totalLedgerAmount  BigInt // sum of corresponding LedgerEntry amounts
+  driftMinor         BigInt // totalStripeAmount − totalLedgerAmount
+  transactionCount   Int    // number of balance_transactions examined
+  matchedCount       Int    // number successfully matched to ledger entries
+  mismatchedRefs     Json   // [{ reference, stripeAmount, ledgerAmount, drift }]
+  createdAt       DateTime @default(now())
+
+  @@index([runAt])
+}

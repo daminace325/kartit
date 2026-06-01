@@ -1,38 +1,41 @@
 import { Worker } from "bullmq";
 import { REDIS_URL } from "../lib/redis";
+import { runReconciliation } from "../lib/reconciliation";
 
 /**
  * Processes reconciliation jobs from the "reconciliation" queue.
  *
  * Event types handled:
  *   reconciliation.daily   — nightly Stripe reconciliation (P2.5)
- *   ledger.write-entries   — write double-entry ledger rows (P2.4)
  *
- * Both are scheduled in P2.4/P2.5; for now we log so the pipeline is wired.
+ * P2.5: reconciliation.daily pulls Stripe balance_transactions since the
+ * last run, joins against Payment/LedgerEntry by PaymentIntent id, detects
+ * drift, and writes a ReconciliationReport row.
  */
 const worker = new Worker(
     "reconciliation",
     async (job) => {
-        const { eventType, aggregateId, payload } = job.data;
+        const { eventType, aggregateId } = job.data;
 
         console.log(
             `[reconciliation] eventType=${eventType} aggregateId=${aggregateId}`,
         );
 
         switch (eventType) {
-            case "reconciliation.daily":
+            case "reconciliation.daily": {
                 console.log(
-                    `[reconciliation] → run daily Stripe reconciliation`,
+                    `[reconciliation] → running Stripe reconciliation`,
                 );
-                // P2.5: pull Stripe balance_transactions, join against LedgerEntry
-                break;
-
-            case "ledger.write-entries":
+                const result = await runReconciliation();
                 console.log(
-                    `[reconciliation] → write ledger entries for order=${aggregateId} direction=${payload?.direction}`,
+                    `[reconciliation] → complete: ` +
+                        `transactions=${result.transactionCount} ` +
+                        `matched=${result.matchedCount} ` +
+                        `drift=${result.driftMinor} ` +
+                        `mismatched=${result.mismatchedCount}`,
                 );
-                // P2.4: insert LedgerEntry rows (DEBIT/CREDIT pairs)
                 break;
+            }
 
             default:
                 console.log(

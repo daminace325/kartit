@@ -29,6 +29,7 @@
     "db:studio": "npm run studio --workspace=packages/db",
     "job:sweep": "ts-node apps/api/src/jobs/sweepAbandonedOrders.ts",
     "job:promote-idempotency": "ts-node apps/api/src/jobs/promoteIdempotencyKeys.ts",
+    "job:reconcile": "npm run build:packages && npm run job:reconcile --workspace=apps/worker",
     "test": "npm run test --workspace=apps/api",
     "test:api": "npm run test --workspace=apps/api",
     "test:watch": "npm run test:watch --workspace=apps/api",
