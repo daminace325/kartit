@@ -64,8 +64,9 @@ export default async function CheckoutPage({
                     </div>
                 </div>
             );
+        } else {
+            throw err;
         }
-        throw err;
     }
 
     if (!publishableKey) {
