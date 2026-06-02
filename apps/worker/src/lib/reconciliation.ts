@@ -56,11 +56,11 @@ export async function runReconciliation(): Promise<{
     let matchedCount = 0;
     const mismatchedRefs: MismatchedRef[] = [];
 
-    // Track which payments we've already added to the ledger total to avoid
-    // double-counting when the same PI appears in both a charge and a refund
-    // balance_transaction (the Stripe total uses signed amounts and cancels
-    // out, so the ledger total must match that behavior).
-    const seenPaymentIds = new Set<string>();
+    // Track which payment charges we've already added to the ledger
+    // total. Refunds are always subtracted — deduplicating by payment ID
+    // alone would skip refund balance transactions on the same PI and
+    // produce a false-positive drift.
+    const addedChargeIds = new Set<string>();
 
     // Cache for charges we've already retrieved
     const chargeCache = new Map<string, ChargeLike>();
@@ -152,18 +152,32 @@ export async function runReconciliation(): Promise<{
                     : BigInt(-bt.amount);
 
             const ledgerAmount = payment.amountMinor;
-            // Add to ledger total once per unique payment — Stripe's signed
-            // amounts already cancel out charge+refund pairs for the same PI.
-            if (!seenPaymentIds.has(payment.id)) {
-                seenPaymentIds.add(payment.id);
-                totalLedgerAmount += ledgerAmount;
+
+            if (bt.type === "charge") {
+                // Add the full payment amount once per unique charge.
+                // Stripe may emit multiple balance transactions for the
+                // same PI (e.g. capture + fee adjustment) — deduplicate
+                // so the ledger total isn't inflated.
+                if (!addedChargeIds.has(payment.id)) {
+                    addedChargeIds.add(payment.id);
+                    totalLedgerAmount += ledgerAmount;
+                }
+            } else {
+                // Refund: subtract the refund amount from the ledger
+                // total so it mirrors Stripe's signed net. Without a
+                // separate refund ledger entry, skip the per-transaction
+                // comparison — only contribute to the aggregate.
+                totalLedgerAmount -= stripeAbs;
             }
 
             const drift = stripeAbs - ledgerAmount;
 
             matchedCount++;
 
-            if (drift !== 0n) {
+            // Only flag charge mismatches. Refunds don't have a separate
+            // ledger entry to compare against — their contribution is
+            // handled in the aggregate via totalLedgerAmount above.
+            if (bt.type === "charge" && drift !== 0n) {
                 mismatchedRefs.push({
                     reference: `pi:${piId}`,
                     stripeAmount: bt.amount.toString(),
