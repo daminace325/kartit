@@ -162,7 +162,7 @@ export const promotionsService = {
 
         const discountMinor =
             promo.type === PromotionType.PERCENTAGE
-                ? (subtotal * promo.value) / 10000n
+                ? (subtotal * promo.value + 5000n) / 10000n
                 : promo.value > subtotal
                   ? subtotal
                   : promo.value;
