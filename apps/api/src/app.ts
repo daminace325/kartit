@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import cookieParser from "cookie-parser";
 import { env } from "./config/env";
 import { healthRouter } from "./modules/health/health.routes";
@@ -19,6 +18,7 @@ import { ledgerRouter } from "./modules/ledger/ledger.routes";
 import { reconciliationRouter } from "./modules/reconciliation/reconciliation.routes";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 import { csrfMiddleware } from "./middlewares/csrf";
+import { createTokenBucketLimiter } from "./middlewares/rateLimiter";
 
 // Compile WEB_ORIGINS once. Each entry is either an exact origin
 // ("https://app.example.com") or a single-`*`-wildcard host
@@ -57,15 +57,19 @@ export function createApp() {
     // Key generator for authenticated endpoints: keys on user ID with
     // fallback to IP, avoiding shared-NAT collisions.
     const authenticatedKeyGenerator = (req: express.Request) =>
-        req.user?.id ?? ipKeyGenerator(req.ip ?? "");
+        req.user?.id ?? (req.ip ?? "unknown");
+
+    // ── Redis-backed token-bucket rate limiters ──────────────────
+    // Each limiter enforces a sustained rate (tokens/sec) with a
+    // configurable burst capacity. All state lives in Redis so limits
+    // are shared across API instances behind a load balancer.
 
     // Rate-limit payment intent creation. Must be mounted BEFORE the payments
     // router so it runs before the route handler.
-    const paymentIntentLimiter = rateLimit({
-        windowMs: 15 * 60 * 1000,
-        limit: 20,
-        standardHeaders: "draft-7",
-        legacyHeaders: false,
+    const paymentIntentLimiter = createTokenBucketLimiter({
+        prefix: "ratelimit:pi",
+        capacity: 20,
+        rate: 20 / (15 * 60),        // 20 tokens per 15-min window
         keyGenerator: authenticatedKeyGenerator,
     });
     app.use("/payments/intent", paymentIntentLimiter);
@@ -85,30 +89,27 @@ export function createApp() {
     app.use(cookieParser());
 
     // Throttle credential endpoints to slow down brute-force / stuffing.
-    const authLimiter = rateLimit({
-        windowMs: 15 * 60 * 1000,
-        limit: 30,
-        standardHeaders: "draft-7",
-        legacyHeaders: false,
+    const authLimiter = createTokenBucketLimiter({
+        prefix: "ratelimit:auth",
+        capacity: 30,
+        rate: 30 / (15 * 60),        // 30 tokens per 15-min window
     });
     app.use("/auth/signin", authLimiter);
     app.use("/auth/signup", authLimiter);
 
     // Tighter limits for sensitive authenticated endpoints.
-    const changePasswordLimiter = rateLimit({
-        windowMs: 15 * 60 * 1000,
-        limit: 10,
-        standardHeaders: "draft-7",
-        legacyHeaders: false,
+    const changePasswordLimiter = createTokenBucketLimiter({
+        prefix: "ratelimit:chpwd",
+        capacity: 10,
+        rate: 10 / (15 * 60),        // 10 tokens per 15-min window
         keyGenerator: authenticatedKeyGenerator,
     });
     app.use("/auth/change-password", changePasswordLimiter);
 
-    const createOrderLimiter = rateLimit({
-        windowMs: 15 * 60 * 1000,
-        limit: 20,
-        standardHeaders: "draft-7",
-        legacyHeaders: false,
+    const createOrderLimiter = createTokenBucketLimiter({
+        prefix: "ratelimit:order",
+        capacity: 20,
+        rate: 20 / (15 * 60),        // 20 tokens per 15-min window
         keyGenerator: authenticatedKeyGenerator,
         skip: (req) => req.method !== "POST",
     });
