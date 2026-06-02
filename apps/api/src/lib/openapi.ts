@@ -1220,6 +1220,31 @@ registry.registerPath({
     },
 });
 
+// -- Admin Webhooks ------------------------------------------
+
+registry.registerPath({
+    method: "post",
+    path: "/admin/webhooks/{id}/retry",
+    summary: "Retry a failed webhook event",
+    description:
+        "Manually retries a webhook event that failed to process. Enqueues a retry job in the webhooks-retry BullMQ queue.",
+    tags: ["Admin"],
+    security: [{ cookieAuth: [] }],
+    request: {
+        params: pathIdSchema,
+    },
+    responses: {
+        200: ok({
+            type: "object",
+            properties: { webhookEventId: { type: "string" } },
+        }),
+        401: unauthorized,
+        403: forbidden,
+        404: notFound,
+        409: conflict,
+    },
+});
+
 // ── Generate Document ───────────────────────────────────────
 
 export const openApiDoc = new OpenApiGeneratorV3(

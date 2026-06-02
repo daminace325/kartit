@@ -798,10 +798,22 @@ Each item is **additive** to Phase 1 — no rewrites of business logic.
 - **Removed:** `express-rate-limit` dependency from `apps/api/package.json`.
 - **app.ts:** All four limiters now use `createTokenBucketLimiter` instead of `rateLimit`.
 
-### 2.9 — Webhook retry pipeline
-- The `WebhookEvent` table from 1.3 gains `attempts`, `nextAttemptAt`, `lastError`.
-- Failed events go to `webhooks-retry` queue with capped attempts and exponential backoff.
-- Replay endpoint for ops: `POST /admin/webhooks/:id/retry`.
+### 2.9 — Webhook retry pipeline ✅ DONE
+- **Schema update:** `WebhookEvent` model gains `attempts Int @default(0)`, `nextAttemptAt DateTime?`, `lastError String?`, and `@@index([nextAttemptAt])`. Migration: `webhook_retry_fields`.
+- **API — `payments.service.ts`:** The handler dispatch in `processWebhook()` is now wrapped in try/catch. On failure, stores error info on the `WebhookEvent` row, enqueues a retry job to the `webhooks-retry` BullMQ queue with exponential backoff, and returns 200 to Stripe (the event was received — our internal pipeline handles it). This prevents the dedup deadlock where a transient failure blocks Stripe's retries via P2002.
+- **API — Queue client:** New `apps/api/src/lib/queue.ts` — creates a BullMQ `Queue("webhooks-retry")` instance pointing at the same Redis as the worker. `bullmq: ^5` added to API dependencies.
+- **Worker — `webhooks-retry.worker.ts`:** Fully wired (was log-only skeleton from P2.3). Processes `webhook.retry` jobs by fetching the stored `WebhookEvent`, extracting the Stripe event from `payload`, and re-running the business logic for `payment_intent.succeeded`, `payment_intent.payment_failed`, and `charge.refunded`. On success marks `processedAt`, creates outbox entries, and handles inventory. On failure updates `attempts`/`lastError` and throws to trigger BullMQ exponential backoff (8 attempts, 10s base).
+- **Admin endpoint:** `POST /admin/webhooks/:id/retry` (admin-gated) — manually retries a stuck webhook event. Clears error state and enqueues a fresh retry job.
+- **New files:**
+  - `apps/api/src/modules/webhooks/webhooks.{routes,controller,service}.ts` — admin retry endpoint
+  - `apps/api/src/lib/queue.ts` — BullMQ queue client for the API
+- **Modified files:**
+  - `packages/db/prisma/schema.prisma` — WebhookEvent retry fields + index
+  - `apps/api/src/modules/payments/payments.service.ts` — try/catch handler dispatch with retry enqueuing
+  - `apps/worker/src/workers/webhooks-retry.worker.ts` — wired from log-only to full retry processing
+  - `apps/api/src/app.ts` — mounted webhooks router at `/admin/webhooks`
+  - `apps/api/src/lib/openapi.ts` — documented `POST /admin/webhooks/{id}/retry`
+  - `apps/api/package.json` — added `bullmq` dependency
 
 ### 2.10 — Observability
 - `pino` structured logging + request_id via `AsyncLocalStorage` (replaces all `console.*` — see [10 hits](apps/api/src) across server.ts, errorHandler.ts, payments.controller.ts, orders.service.ts, cloudinary.ts).

@@ -8,8 +8,16 @@ import { env } from "../../config/env";
 import { AppError } from "../../lib/errors";
 import { getStripe } from "../../lib/stripe";
 import { logger } from "../../lib/logger";
+import { webhooksRetryQueue } from "../../lib/queue";
 import { ordersPaymentService } from "../orders/orders.payment.service";
 import { ordersService } from "../orders/orders.service";
+
+// ── Backoff helper ─────────────────────────────────────────────
+// Exponential backoff: start at 10 s, double each retry, cap at 24 h.
+
+function backoffDelay(attempt: number): number {
+    return Math.min(10_000 * Math.pow(2, attempt - 1), 86_400_000);
+}
 
 export const paymentsService = {
     /**
@@ -62,49 +70,96 @@ export const paymentsService = {
             throw err;
         }
 
-        switch (event.type) {
-            case "payment_intent.succeeded": {
-                const intent = event.data.object as Stripe.PaymentIntent;
-                const order = await ordersPaymentService.markPaidByPaymentIntent(intent.id);
-                if (!order) {
-                    logger.warn(
-                        `[stripe] payment_intent.succeeded for unknown intent ${intent.id}`,
-                    );
+        // ── Dispatch to handler ────────────────────────────────
+        // Wrapped in try/catch so a transient handler failure does not
+        // permanently lose the event: we store the error, enqueue a retry
+        // job to the webhooks-retry queue, and still return 200 to Stripe
+        // (the event was received — our internal pipeline will reprocess).
+        try {
+            switch (event.type) {
+                case "payment_intent.succeeded": {
+                    const intent = event.data.object as Stripe.PaymentIntent;
+                    const order = await ordersPaymentService.markPaidByPaymentIntent(intent.id);
+                    if (!order) {
+                        logger.warn(
+                            `[stripe] payment_intent.succeeded for unknown intent ${intent.id}`,
+                        );
+                    }
+                    break;
                 }
-                break;
+                case "payment_intent.payment_failed": {
+                    const intent = event.data.object as Stripe.PaymentIntent;
+                    const reason =
+                        intent.last_payment_error?.message ??
+                        intent.last_payment_error?.code ??
+                        undefined;
+                    const order = await ordersPaymentService.markFailedByPaymentIntent(
+                        intent.id,
+                        reason,
+                    );
+                    if (!order) {
+                        logger.warn(
+                            `[stripe] payment_intent.payment_failed for unknown intent ${intent.id}`,
+                        );
+                    }
+                    break;
+                }
+                case "charge.refunded": {
+                    const charge = event.data.object as Stripe.Charge;
+                    const paymentIntentId = charge.payment_intent as string;
+                    const order = await ordersPaymentService.markRefundedByPaymentIntent(
+                        paymentIntentId,
+                    );
+                    if (!order) {
+                        logger.warn(
+                            `[stripe] charge.refunded for unknown payment intent ${paymentIntentId}`,
+                        );
+                    }
+                    break;
+                }
+                default:
+                    break;
             }
-            case "payment_intent.payment_failed": {
-                const intent = event.data.object as Stripe.PaymentIntent;
-                const reason =
-                    intent.last_payment_error?.message ??
-                    intent.last_payment_error?.code ??
-                    undefined;
-                const order = await ordersPaymentService.markFailedByPaymentIntent(
-                    intent.id,
-                    reason,
+        } catch (err) {
+            const errorMessage =
+                err instanceof Error ? err.message : String(err);
+            const newAttempts = 1; // first failure
+
+            logger.error(
+                `[stripe] webhook processing failed eventId=${event.id} type=${event.type} err=${errorMessage} — enqueuing retry`,
+            );
+
+            // Store error info and enqueue a retry. The webhooks-retry
+            // worker will pick this up and re-attempt with backoff.
+            const delay = backoffDelay(newAttempts);
+
+            await prisma.webhookEvent.update({
+                where: { id: webhookEventId },
+                data: {
+                    attempts: newAttempts,
+                    lastError: errorMessage,
+                    nextAttemptAt: new Date(Date.now() + delay),
+                },
+            });
+
+            // Fire-and-forget enqueue. If Redis is unreachable we still
+            // have the WebhookEvent row updated with nextAttemptAt — ops
+            // can manually retry via POST /admin/webhooks/:id/retry.
+            try {
+                await webhooksRetryQueue.add(
+                    "webhook.retry",
+                    { webhookEventId },
+                    { delay },
                 );
-                if (!order) {
-                    logger.warn(
-                        `[stripe] payment_intent.payment_failed for unknown intent ${intent.id}`,
-                    );
-                }
-                break;
-            }
-            case "charge.refunded": {
-                const charge = event.data.object as Stripe.Charge;
-                const paymentIntentId = charge.payment_intent as string;
-                const order = await ordersPaymentService.markRefundedByPaymentIntent(
-                    paymentIntentId,
+            } catch (queueErr) {
+                logger.error(
+                    `[stripe] failed to enqueue retry for eventId=${event.id}: ${(queueErr as Error).message}`,
                 );
-                if (!order) {
-                    logger.warn(
-                        `[stripe] charge.refunded for unknown payment intent ${paymentIntentId}`,
-                    );
-                }
-                break;
             }
-            default:
-                break;
+
+            // Return 200 so Stripe doesn't retry the event (our pipeline
+            // handles it). The event was *received* — just not processed yet.
+            return { duplicate: false as const };
         }
 
         await prisma.webhookEvent.update({

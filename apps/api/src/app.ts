@@ -16,6 +16,7 @@ import { promotionsRouter } from "./modules/promotions/promotions.routes";
 import { docsRouter } from "./modules/docs/docs.routes";
 import { ledgerRouter } from "./modules/ledger/ledger.routes";
 import { reconciliationRouter } from "./modules/reconciliation/reconciliation.routes";
+import { webhooksRouter } from "./modules/webhooks/webhooks.routes";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 import { csrfMiddleware } from "./middlewares/csrf";
 import { createTokenBucketLimiter } from "./middlewares/rateLimiter";
@@ -130,6 +131,7 @@ export function createApp() {
     app.use("/promotions", promotionsRouter);
     app.use("/admin/ledger", ledgerRouter);
     app.use("/admin/reconciliation", reconciliationRouter);
+    app.use("/admin/webhooks", webhooksRouter);
     app.use("/docs", docsRouter);
 
     app.use(notFoundHandler);

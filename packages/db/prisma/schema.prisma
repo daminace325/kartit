@@ -300,17 +300,21 @@ model RefundRequest {
 }
 
 model WebhookEvent {
-  id          String    @id @default(cuid())
-  provider    String
-  eventId     String    @unique
-  type        String
-  receivedAt  DateTime  @default(now())
-  processedAt DateTime?
-  payload     Json
+  id            String    @id @default(cuid())
+  provider      String
+  eventId       String    @unique
+  type          String
+  receivedAt    DateTime  @default(now())
+  processedAt   DateTime?
+  payload       Json
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime?
+  lastError     String?
 
   @@index([provider])
   @@index([type])
   @@index([processedAt])
+  @@index([nextAttemptAt])
 }
 
 model Promotion {
