@@ -1,5 +1,6 @@
 import type { ErrorRequestHandler, RequestHandler } from "express";
 import multer from "multer";
+import { Prisma } from "@repo/db";
 import { AppError } from "../lib/errors";
 import { logger } from "../lib/logger";
 
@@ -33,6 +34,28 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
             error: { code: "INVALID_FILE_TYPE", message: err.message },
         });
         return;
+    }
+
+    // Prisma known errors → HTTP status codes so every endpoint benefits.
+    if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === "P2002") {
+            res.status(409).json({
+                error: {
+                    code: "ALREADY_EXISTS",
+                    message: "A record with that value already exists",
+                },
+            });
+            return;
+        }
+        if (err.code === "P2025") {
+            res.status(404).json({
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Record not found",
+                },
+            });
+            return;
+        }
     }
 
     logger.error("[unhandled error]", err);
