@@ -10,7 +10,7 @@ Build a production-grade ecomm app for resume → target **Rippling SE I (FinTec
 
 - **Monorepo:** npm workspaces
 - **Web:** `apps/web` — Next.js 16 + React 19 + Tailwind v4 (App Router)
-- **API:** `apps/api` — Express 5 + TypeScript + ts-node-dev, hardened with `helmet` + `express-rate-limit`
+- **API:** `apps/api` — Express 5 + TypeScript + ts-node-dev, hardened with `helmet` + Redis-backed token-bucket rate limiter
 - **DB package:** `packages/db` — Prisma 7 + `@prisma/adapter-pg` (Postgres adapter), seed script
 - **Shared package:** `packages/shared` — zod schemas, money helpers, enums, error codes, pricing, cloudinary URL helper
 - **DB:** Postgres 16 in Docker (`docker-compose.yml` at monorepo root)
@@ -273,7 +273,7 @@ ecomm/
 - **Checkout is now two-step:** `POST /orders` creates the PENDING order (reserves stock); `POST /payments/intent` creates the Stripe PaymentIntent. Both accept `Idempotency-Key` (frontend uses `${base}:order` and `${base}:intent`).
 - **CORS:** `WEB_ORIGINS` (plural) is the env var. Each entry is exact origin or single-`*`-host wildcard. Compiled into matchers once at boot.
 - **`trust proxy: 1`** is set so Render's LB gives correct `req.secure` / `req.ip` and the `Secure` cookie attribute behaves.
-- **Auth rate-limit:** 30 req / 15 min on `/auth/signin` + `/auth/signup` (`express-rate-limit`, draft-7 headers).
+- **Rate limiting:** Redis-backed token-bucket (shared across API instances). Lua script atomically refills + consumes tokens, returning 429 with `Retry-After` when exhausted. Falls open if Redis is unreachable. Covers `/auth/signin`, `/auth/signup` (30 tok, 0.033/s), `/auth/change-password` (10 tok, 0.011/s), `POST /orders` (20 tok, 0.022/s), `POST /payments/intent` (20 tok, 0.022/s). IETF draft-7 headers (`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`) on every response.
 - **P2 schema progress:** `Outbox` ✅ (2.3), `LedgerEntry` ✅ (2.4), `ReconciliationReport` ✅ (2.5), Reservation model (`physicalStock` + `reservedQty`) ✅ (2.7). Remaining P2: `RefreshToken` rotation family (2.12).
 - **Repo polish gotcha:** `.gitignore` currently ignores `.editorconfig`. `context/` is commented out in `.gitignore` (committed). If this repo is going to GitHub for resume review, stop ignoring `.editorconfig`.
 - **Migration command:** `npm run db:migrate:dev -- --name <name>` from root (or directly in `packages/db`).
@@ -785,9 +785,18 @@ Each item is **additive** to Phase 1 — no rewrites of business logic.
 - **k6:** [inventory-concurrency.js](k6/inventory-concurrency.js) — 200 concurrent checkouts of a 10-stock SKU; threshold asserts exactly 10 succeed.
 - **Migration:** `reservation_model` — drops `stock`, adds `physicalStock` + `reservedQty`.
 
-### 2.8 — Token-bucket rate limiting (Redis)
-- Replace in-memory `express-rate-limit` with a Redis-backed token-bucket on `/auth/*`, `POST /orders`, `POST /payments/intent`.
-- 429 with `Retry-After` header.
+### 2.8 — Token-bucket rate limiting (Redis) ✅ DONE
+- **Middleware:** `apps/api/src/middlewares/rateLimiter.ts` — `createTokenBucketLimiter()` factory using a Redis Lua script for atomic token-bucket operations (refill + consume in one round-trip).
+- **Lua script:** `HMGET tokens,last` → compute `elapsed * rate` refill (capped at capacity) → consume cost tokens → `HMSET` back with TTL. Returns `[allowed, remaining, retryAfter]`.
+- **Headers:** IETF draft-7 (`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`) on every response; `Retry-After` on 429.
+- **Fail-open:** If Redis is unreachable the request is allowed through so a rate-limiter outage doesn't bring down the API.
+- **Coverage:**
+  - `/auth/signin` + `/auth/signup` — 30 capacity, 0.033 tok/s (IP-keyed)
+  - `/auth/change-password` — 10 capacity, 0.011 tok/s (user-id-keyed, fallback IP)
+  - `POST /orders` — 20 capacity, 0.022 tok/s (user-id-keyed, fallback IP; skips GET)
+  - `POST /payments/intent` — 20 capacity, 0.022 tok/s (user-id-keyed, fallback IP)
+- **Removed:** `express-rate-limit` dependency from `apps/api/package.json`.
+- **app.ts:** All four limiters now use `createTokenBucketLimiter` instead of `rateLimit`.
 
 ### 2.9 — Webhook retry pipeline
 - The `WebhookEvent` table from 1.3 gains `attempts`, `nextAttemptAt`, `lastError`.
