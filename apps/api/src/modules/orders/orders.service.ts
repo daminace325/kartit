@@ -438,6 +438,8 @@ export const ordersService = {
             OrderStatus.PROCESSING,
         ];
 
+        let refundPaymentId: string | null = null;
+
         const updated = await prisma.$transaction(async (tx) => {
             const existing = await tx.order.findUnique({
                 where: { id },
@@ -488,22 +490,12 @@ export const ordersService = {
 
             await restoreInventory(tx, existing.items);
 
-            // For PAID/PROCESSING: refund via Stripe. If Stripe fails the
-            // transaction rolls back, reverting the order to its prior state.
+            // Capture payment ID for refund after the transaction commits.
+            // Stripe refunds must happen outside the DB transaction — a DB
+            // rollback cannot undo money that has already been sent.
             if (existing.status !== OrderStatus.PENDING) {
                 const payment = existing.payments[0];
-                if (payment?.providerPaymentId) {
-                    const stripe = getStripe();
-                    await stripe.refunds.create({
-                        payment_intent: payment.providerPaymentId,
-                    });
-                    // Mark payment as refunded now. The charge.refunded webhook
-                    // won't match because CANCELLED is outside STOCK_HELD.
-                    await tx.payment.update({
-                        where: { id: payment.id },
-                        data: { status: PaymentStatus.REFUNDED },
-                    });
-                }
+                refundPaymentId = payment?.providerPaymentId ?? null;
             }
 
             // P2.3: outbox entry for OrderCancelled → order-events queue
@@ -524,6 +516,23 @@ export const ordersService = {
                 include: ORDER_INCLUDE,
             });
         });
+
+        // Refund via Stripe outside the transaction — DB rollback can't undo
+        // money movement. The idempotency key makes it safe to retry if this
+        // call or the subsequent payment update fails.
+        if (refundPaymentId) {
+            const stripe = getStripe();
+            await stripe.refunds.create(
+                { payment_intent: refundPaymentId },
+                { idempotencyKey: `refund_${id}` },
+            );
+            // The charge.refunded webhook won't match because CANCELLED is
+            // outside STOCK_HELD, so mark the payment as refunded now.
+            await prisma.payment.update({
+                where: { providerPaymentId: refundPaymentId },
+                data: { status: PaymentStatus.REFUNDED },
+            });
+        }
 
         return toOrderDTO(updated);
     },
