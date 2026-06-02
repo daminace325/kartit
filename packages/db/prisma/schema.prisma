@@ -119,16 +119,17 @@ model Category {
 }
 
 model Product {
-  id          String    @id @default(cuid())
-  slug        String    @unique
-  name        String
-  description String
-  priceMinor  BigInt
-  currency    String    @db.Char(3)
-  stock       Int       @default(0)
-  isActive    Boolean   @default(true)
-  sku         String    @unique
-  deletedAt   DateTime?
+  id            String    @id @default(cuid())
+  slug          String    @unique
+  name          String
+  description   String
+  priceMinor    BigInt
+  currency      String    @db.Char(3)
+  physicalStock Int       @default(0)
+  reservedQty   Int       @default(0)
+  isActive      Boolean   @default(true)
+  sku           String    @unique
+  deletedAt     DateTime?
 
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])

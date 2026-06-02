@@ -78,7 +78,8 @@ export async function createTestProduct(overrides?: {
     slug?: string;
     name?: string;
     priceMinor?: bigint;
-    stock?: number;
+    physicalStock?: number;
+    reservedQty?: number;
     categoryId?: string;
     isActive?: boolean;
     sku?: string;
@@ -94,7 +95,8 @@ export async function createTestProduct(overrides?: {
             description: "A test product",
             priceMinor: overrides?.priceMinor ?? 1999n,
             currency: "USD",
-            stock: overrides?.stock ?? 100,
+            physicalStock: overrides?.physicalStock ?? 100,
+            reservedQty: overrides?.reservedQty ?? 0,
             categoryId: cid,
             isActive: overrides?.isActive ?? true,
             sku: overrides?.sku ?? `SKU-TEST-${prodCounter}`,

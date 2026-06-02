@@ -6,6 +6,7 @@ import {
     ALLOWED_TRANSITIONS,
     ORDER_INCLUDE,
     restoreInventory,
+    shipInventory,
     STOCK_HELD,
     STOCK_RELEASE,
     toOrderDTO,
@@ -57,8 +58,19 @@ export const ordersStatusService = {
                 );
             }
 
+            // Ship: items physically leave the warehouse. Decrement both
+            // physicalStock and reservedQty (the reservation is fulfilled).
+            if (next === OrderStatus.SHIPPED) {
+                await shipInventory(tx, existing.items);
+            }
+
+            // Release: transition from a stock-held state to a stock-release
+            // state (cancel / fail / refund). Was the order shipped?
             if (STOCK_HELD.has(current) && STOCK_RELEASE.has(next)) {
-                await restoreInventory(tx, existing.items);
+                const wasShipped =
+                    current === OrderStatus.SHIPPED ||
+                    current === OrderStatus.DELIVERED;
+                await restoreInventory(tx, existing.items, wasShipped);
             }
 
             return tx.order.findUniqueOrThrow({

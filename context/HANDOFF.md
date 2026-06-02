@@ -54,7 +54,7 @@ Build a production-grade ecomm app for resume → target **Rippling SE I (FinTec
 - **`ProductImage` as separate model** with array
 - **`.env.example` files exist at root, `apps/api/`, and `apps/web/`** — each documents its own required env vars
 - **No markdown docs unless asked**
-- **Phase boundaries:** P1 may add small support tables/fields (`IdempotencyKey`, `WebhookEvent`, `Order` address snapshot fields, `tokenVersion`) when they're needed by a fix. P2 infra adds `Outbox` (✅ 2.3), `LedgerEntry` (2.4), `RefreshToken` family (2.12), `Reservation` (2.7) and the `apps/worker` service (✅ 2.3).
+- **Phase boundaries:** P1 may add small support tables/fields (`IdempotencyKey`, `WebhookEvent`, `Order` address snapshot fields, `tokenVersion`) when they're needed by a fix. P2 infra adds `Outbox` (✅ 2.3), `LedgerEntry` (✅ 2.4), `Reservation` (`physicalStock`/`reservedQty`) (✅ 2.7), `RefreshToken` family (2.12) and the `apps/worker` service (✅ 2.3).
 - **Step-by-step**, verify each step before moving on
 
 ## Current Prisma schema (Foundation + Phase 2 partial)
@@ -64,7 +64,7 @@ Models:
 - **`User`** — id, email (unique), passwordHash, name?, role (`CUSTOMER`|`ADMIN`), tokenVersion (`Int @default(0)`)
 - **`Address`** — userId, line1, line2?, city, state?, postalCode, country?
 - **`Category`** — slug (unique), name, parentId? (self-relation `CategoryToSubcategory`, `onDelete: SetNull`)
-- **`Product`** — slug (unique), name, description, priceMinor (`BigInt`), currency (`Char(3)`), stock, isActive, categoryId
+- **`Product`** — slug (unique), name, description, priceMinor (`BigInt`), currency (`Char(3)`), physicalStock, reservedQty (`Int @default(0)`), isActive, categoryId. Available stock = `physicalStock - reservedQty`.
 - **`ProductImage`** — productId (cascade), url, publicId, alt?, position, `@@unique([productId, position])`
 - **`Cart`** — userId (unique, cascade)
 - **`CartItem`** — cartId+productId unique, quantity
@@ -96,6 +96,7 @@ Money everywhere as `BigInt` minor units, currency `Char(3)`. Never floats.
 - `20260531105522_outbox_pattern` — Outbox model + OutboxStatus enum (P2.3)
 - `20260531124703_ledger` — LedgerEntry model + LedgerDirection enum (P2.4)
 - `20260601124439_reconciliation_report` — ReconciliationReport model (P2.5)
+- `20260601204906_reservation_model` — replaces `Product.stock` with `physicalStock` + `reservedQty` (P2.7)
 
 ## File structure
 
@@ -202,7 +203,7 @@ ecomm/
           emails.ts               ← email sending (P2.15 will wire Resend/Postmark)
           reconciliation.ts       ← ledger + reconciliation jobs (P2.4/P2.5)
           webhooks-retry.ts       ← webhook retry pipeline (P2.9)
-          inventory-sweep.ts      ← abandoned-order sweeping (P2.7)
+          inventory-sweep.ts      ← abandoned-order sweeping (P2.7 ✅ — inventory model done, sweep logs only for now)
         workers/
           index.ts                ← barrel export of all workers
           order-events.worker.ts  ← processes OrderCreated/Paid/Cancelled/Refunded/Failed
@@ -273,13 +274,13 @@ ecomm/
 - **CORS:** `WEB_ORIGINS` (plural) is the env var. Each entry is exact origin or single-`*`-host wildcard. Compiled into matchers once at boot.
 - **`trust proxy: 1`** is set so Render's LB gives correct `req.secure` / `req.ip` and the `Secure` cookie attribute behaves.
 - **Auth rate-limit:** 30 req / 15 min on `/auth/signin` + `/auth/signup` (`express-rate-limit`, draft-7 headers).
-- **P2 schema progress:** `Outbox` ✅ (2.3), `LedgerEntry` ✅ (2.4), `ReconciliationReport` ✅ (2.5). Remaining P2: `RefreshToken` rotation family (2.12), `Reservation` (2.7).
+- **P2 schema progress:** `Outbox` ✅ (2.3), `LedgerEntry` ✅ (2.4), `ReconciliationReport` ✅ (2.5), Reservation model (`physicalStock` + `reservedQty`) ✅ (2.7). Remaining P2: `RefreshToken` rotation family (2.12).
 - **Repo polish gotcha:** `.gitignore` currently ignores `.editorconfig`. `context/` is commented out in `.gitignore` (committed). If this repo is going to GitHub for resume review, stop ignoring `.editorconfig`.
 - **Migration command:** `npm run db:migrate:dev -- --name <name>` from root (or directly in `packages/db`).
 - **`migrate dev` auto-runs `generate`** — don't run generate separately unless after a fresh `npm install`.
 - **Render deploy:** start command runs `db:migrate:deploy && db:seed && start:api`. Seed must be idempotent.
 - **Health probes:** `/health/live` (no deps — Render uses this) vs `/health` and `/health/readyz` (DB + Redis ping — monitoring/traffic gating).
-- **Outbox pattern (P2.3):** Order/payment services write to `Outbox` in the same `$transaction` as business state changes — guarantees atomicity. A separate `apps/worker` process runs the outbox dispatcher (polls PENDING → enqueues to BullMQ) + 5 BullMQ workers. At-least-once delivery; workers must be idempotent. `order-events` worker writes ledger entries (P2.4). `reconciliation` worker runs Stripe reconciliation (P2.5). `emails`, `webhooks-retry`, `inventory-sweep` remain log-only (future P2 items).
+- **Outbox pattern (P2.3):** Order/payment services write to `Outbox` in the same `$transaction` as business state changes — guarantees atomicity. A separate `apps/worker` process runs the outbox dispatcher (polls PENDING → enqueues to BullMQ) + 5 BullMQ workers. At-least-once delivery; workers must be idempotent. `order-events` worker writes ledger entries (P2.4). `reconciliation` worker runs Stripe reconciliation (P2.5). `emails`, `webhooks-retry`, `inventory-sweep` remain log-only (future P2 items). P2.7 inventory model is done (`physicalStock`/`reservedQty`); the `inventory-sweep` worker will wire actual reservation release in a future pass.
 - **Worker Redis:** BullMQ uses URL-based connection (`{ url: REDIS_URL }`), not an ioredis instance — avoids type conflicts with BullMQ's bundled ioredis version.
 - **Ledger balance convention (P2.4):** Asset/expense accounts (CASH, REFUNDS, FEES) show balance as `DEBIT − CREDIT` (money in = balance up). Revenue accounts (REVENUE) show `CREDIT − DEBIT` (revenue earned = balance up). This matches standard accounting: debit increases assets, credit increases liabilities/revenue.
 
@@ -766,18 +767,23 @@ Each item is **additive** to Phase 1 — no rewrites of business logic.
 - **Dependencies:** `stripe` added to `apps/worker/package.json`. Env: `STRIPE_SECRET_KEY` required by worker for reconciliation jobs.
 - Resume bullet: "balance drift <1¢ across 10k+ simulated transactions".
 
-### 2.6 — Risk engine
+### 2.6 — Risk engine ⏭️ SKIPPED
 - `apps/api/src/lib/risk/` with composable rules: velocity (orders/24h/user+ip), geo-mismatch (BIN country vs ship country), disposable email, first-order-high-value, address blacklist, BIN check.
 - Each rule returns `{ score, reason }`; total score routes to `ALLOW / REVIEW / BLOCK`.
 - Add `riskScore`, `riskReasons String[]`, and `OrderStatus.REVIEW` to `Order`.
 - Admin review queue page; transition `REVIEW → PAID` or `REVIEW → CANCELLED` (refund).
 - Resume bullet: "<5ms p99 per scoring decision".
 
-### 2.7 — Inventory safety under concurrency
-- Replace optimistic decrement with `pg_advisory_xact_lock(hashtext(productId))` inside the order create tx.
-- (Redlock optional — only useful if the API horizontally scales beyond one PG cluster.)
-- Reservation model: split `Product.stock` into `physicalStock` (only changes on ship/return) and `reservedQty` (incremented on order create, decremented on cancel/ship).
-- k6 concurrency test: 200 concurrent checkouts of a 10-stock SKU; assert exactly 10 succeed.
+### 2.7 — Inventory safety under concurrency ✅ DONE
+- **Schema:** Replaced `Product.stock` with `physicalStock` (actual warehouse count, only changes on ship/return) and `reservedQty` (incremented on order create, decremented on cancel/ship). Available to sell = `physicalStock - reservedQty`.
+- **Advisory lock:** `reserveInventory()` in [orders.service.ts](apps/api/src/modules/orders/orders.service.ts) takes `pg_advisory_xact_lock(hashtext(productId))` per product (sorted by ID to prevent deadlocks) inside the order-create transaction, then reads available stock under lock and increments `reservedQty`. Lock auto-releases on commit/rollback.
+- **Shipping:** `shipInventory()` decrements both `physicalStock` and `reservedQty` when admin transitions `PROCESSING → SHIPPED`.
+- **Restore:** `restoreInventory(tx, items, wasShipped)` — if `wasShipped` (SHIPPED/DELIVERED), increments `physicalStock` (item returns to warehouse); otherwise decrements `reservedQty` (just releases the reservation).
+- **Cart service:** All stock checks now use `physicalStock - reservedQty` (available stock) instead of the old single `stock` field.
+- **Web:** `ProductForm` sends `physicalStock`. Product DTO still exposes a computed `stock` field for display.
+- **Tests:** Updated all test helpers (`createTestProduct` accepts `physicalStock`/`reservedQty`) and assertions. All 58 tests pass.
+- **k6:** [inventory-concurrency.js](k6/inventory-concurrency.js) — 200 concurrent checkouts of a 10-stock SKU; threshold asserts exactly 10 succeed.
+- **Migration:** `reservation_model` — drops `stock`, adds `physicalStock` + `reservedQty`.
 
 ### 2.8 — Token-bucket rate limiting (Redis)
 - Replace in-memory `express-rate-limit` with a Redis-backed token-bucket on `/auth/*`, `POST /orders`, `POST /payments/intent`.

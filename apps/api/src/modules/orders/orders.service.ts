@@ -105,14 +105,97 @@ export function toOrderDTO(order: OrderWithItems): OrderDTO {
     };
 }
 
+/**
+ * Reserve inventory for newly created orders. Takes `pg_advisory_xact_lock`
+ * on each product (sorted by ID to prevent deadlocks), then atomically checks
+ * availability and increments `reservedQty`. The lock is held until the
+ * surrounding transaction commits or rolls back, guaranteeing serialized
+ * access to each product's reservation slot.
+ */
+export async function reserveInventory(
+    tx: Prisma.TransactionClient,
+    items: Array<{ productId: string; quantity: number; productName: string }>,
+): Promise<void> {
+    // Sort by product ID to prevent deadlocks when multiple transactions
+    // lock the same set of products in different order.
+    const sorted = [...items].sort((a, b) => a.productId.localeCompare(b.productId));
+
+    for (const it of sorted) {
+        // Transaction-level advisory lock — auto-released on commit/rollback.
+        // $executeRawUnsafe is used because pg_advisory_xact_lock returns void,
+        // which Prisma's $queryRawUnsafe (designed for row-returning queries)
+        // cannot deserialize.
+        await tx.$executeRawUnsafe(
+            `SELECT pg_advisory_xact_lock(hashtext($1))`,
+            it.productId,
+        );
+
+        // Read under lock — no other tx can change reservedQty for this product.
+        const product = await tx.product.findUniqueOrThrow({
+            where: { id: it.productId, deletedAt: null },
+            select: { physicalStock: true, reservedQty: true },
+        });
+
+        const available = product.physicalStock - product.reservedQty;
+        if (available < it.quantity) {
+            throw AppError.conflict(
+                "INSUFFICIENT_STOCK",
+                `Insufficient stock for "${it.productName}"`,
+            );
+        }
+
+        await tx.product.update({
+            where: { id: it.productId },
+            data: { reservedQty: { increment: it.quantity } },
+        });
+    }
+}
+
+/**
+ * Release inventory reservation (cancel / fail / refund).
+ *
+ * - If `wasShipped` is true (order was SHIPPED/DELIVERED), the items physically
+ *   return to the warehouse: `physicalStock += quantity`.
+ * - Otherwise the items were never shipped, so we just release the reservation:
+ *   `reservedQty -= quantity`.
+ */
 export async function restoreInventory(
+    tx: Prisma.TransactionClient,
+    items: Array<{ productId: string; quantity: number }>,
+    wasShipped: boolean = false,
+): Promise<void> {
+    for (const item of items) {
+        if (wasShipped) {
+            // Item physically returns — increment physical stock.
+            await tx.product.update({
+                where: { id: item.productId },
+                data: { physicalStock: { increment: item.quantity } },
+            });
+        } else {
+            // Never left the warehouse — just release the reservation.
+            await tx.product.update({
+                where: { id: item.productId },
+                data: { reservedQty: { decrement: item.quantity } },
+            });
+        }
+    }
+}
+
+/**
+ * Ship items: decrement both physicalStock AND reservedQty.
+ * Items physically leave the warehouse and are no longer reserved.
+ */
+export async function shipInventory(
     tx: Prisma.TransactionClient,
     items: Array<{ productId: string; quantity: number }>,
 ): Promise<void> {
     for (const item of items) {
         await tx.product.update({
             where: { id: item.productId },
-            data: { stock: { increment: item.quantity } },
+            data: {
+                physicalStock: { decrement: item.quantity },
+                reservedQty: { decrement: item.quantity },
+            },
         });
     }
 }
@@ -153,7 +236,8 @@ export const ordersService = {
             throw AppError.badRequest("CART_EMPTY", "Cart is empty");
         }
 
-        // Re-validate active + stock with current product rows (mirror /cart/summary).
+        // Re-validate active + available stock with current product rows (mirror /cart/summary).
+        // Available = physicalStock - reservedQty (items already tied up in other active orders).
         for (const item of cart.items) {
             if (!item.product.isActive || !item.product.category.isActive || item.product.deletedAt) {
                 throw AppError.conflict(
@@ -161,10 +245,18 @@ export const ordersService = {
                     `Product "${item.product.name}" is no longer available`,
                 );
             }
-            if (item.quantity > item.product.stock) {
+            // Re-fetch the latest available stock right before the transaction.
+            // The advisory lock inside reserveInventory is the true gate — this is
+            // a fast-fail check only.
+            const fresh = await prisma.product.findUniqueOrThrow({
+                where: { id: item.productId, deletedAt: null },
+                select: { physicalStock: true, reservedQty: true },
+            });
+            const available = fresh.physicalStock - fresh.reservedQty;
+            if (item.quantity > available) {
                 throw AppError.conflict(
                     "INSUFFICIENT_STOCK",
-                    `Only ${item.product.stock} of "${item.product.name}" in stock`,
+                    `Only ${available} of "${item.product.name}" in stock`,
                 );
             }
         }
@@ -222,22 +314,11 @@ export const ordersService = {
         }));
 
         const order = await prisma.$transaction(async (tx) => {
-            // Atomic conditional decrement per line. If any product was
-            // taken below the requested quantity by a concurrent order,
-            // updateMany returns count 0 → throw INSUFFICIENT_STOCK; the
-            // surrounding transaction rolls back any earlier decrements.
-            for (const it of itemsSnapshot) {
-                const result = await tx.product.updateMany({
-                    where: { id: it.productId, deletedAt: null, stock: { gte: it.quantity } },
-                    data: { stock: { decrement: it.quantity } },
-                });
-                if (result.count !== 1) {
-                    throw AppError.conflict(
-                        "INSUFFICIENT_STOCK",
-                        `Insufficient stock for "${it.productName}"`,
-                    );
-                }
-            }
+            // Reserve inventory under pg_advisory_xact_lock per product.
+            // Locks are sorted by productId to prevent deadlocks. The lock
+            // guarantees serialized access — exactly N out of M concurrent
+            // checkouts will succeed for an N-stock SKU.
+            await reserveInventory(tx, itemsSnapshot);
 
             const created = await tx.order.create({
                 data: {

@@ -26,7 +26,7 @@ export type CartItemDTO = {
     unitPriceMinor: string;
     currency: string;
     imageUrl: string | null;
-    stock: number;
+    stock: number; // computed: physicalStock - reservedQty (available to sell)
     isActive: boolean;
     lineTotalMinor: string;
 };

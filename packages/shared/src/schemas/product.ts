@@ -23,7 +23,7 @@ export const productCreateSchema = z.object({
     // Money: minor units as integer
     priceMinor: z.coerce.number().int().nonnegative(),
     currency: z.string().length(3),
-    stock: z.coerce.number().int().nonnegative().default(0),
+    physicalStock: z.coerce.number().int().nonnegative().default(0),
     isActive: z.boolean().default(true),
     categoryId: z.string().min(1),
     // Up to 6 images. Actual upload flow lands in 1.5; schema is ready now.
@@ -62,7 +62,9 @@ export type ProductDTO = {
     description: string;
     priceMinor: string;
     currency: string;
-    stock: number;
+    physicalStock: number;
+    reservedQty: number;
+    stock: number; // computed: physicalStock - reservedQty (available to sell)
     isActive: boolean;
     categoryId: string;
     images: ProductImageDTO[];

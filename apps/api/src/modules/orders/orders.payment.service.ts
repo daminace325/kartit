@@ -223,7 +223,10 @@ export const ordersPaymentService = {
                 data: { status: PaymentStatus.REFUNDED },
             });
 
-            await restoreInventory(tx, order.items);
+            const wasShipped =
+                order.status === OrderStatus.SHIPPED ||
+                order.status === OrderStatus.DELIVERED;
+            await restoreInventory(tx, order.items, wasShipped);
 
             // P2.3: outbox entry for OrderRefunded → order-events queue
             await tx.outbox.create({

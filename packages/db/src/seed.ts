@@ -64,7 +64,7 @@ type ProductSeed = {
   name: string;
   description: string;
   priceMinor: bigint;
-  stock: number;
+  physicalStock: number;
   /**
    * Cloudinary public IDs in display order (index 0 = primary).
    * Leave empty to skip images for this product. The full URL is built
@@ -97,7 +97,7 @@ const p = (
   description: string,
   priceMinor: number,
   images: ImageSeed[] = [],
-  stock = 25,
+  physicalStock = 25,
   sku?: string,
 ): ProductSeed => ({
   slug,
@@ -106,7 +106,7 @@ const p = (
   name,
   description,
   priceMinor: BigInt(priceMinor),
-  stock,
+  physicalStock,
   images,
 });
 
@@ -790,7 +790,7 @@ async function seedCatalog() {
             description: prod.description,
             priceMinor: prod.priceMinor,
             currency: CURRENCY,
-            stock: prod.stock,
+            physicalStock: prod.physicalStock,
             isActive: true,
             categoryId: child.id,
           },
@@ -801,7 +801,7 @@ async function seedCatalog() {
             description: prod.description,
             priceMinor: prod.priceMinor,
             currency: CURRENCY,
-            stock: prod.stock,
+            physicalStock: prod.physicalStock,
             isActive: true,
             categoryId: child.id,
           },

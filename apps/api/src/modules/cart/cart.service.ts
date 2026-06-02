@@ -38,6 +38,10 @@ const CART_INCLUDE = {
     },
 } satisfies Prisma.CartInclude;
 
+function availableStock(product: { physicalStock: number; reservedQty: number }): number {
+    return product.physicalStock - product.reservedQty;
+}
+
 function toItemDTO(item: CartWithItems["items"][number]): CartItemDTO {
     const product = item.product;
     const cover = [...product.images].sort((a, b) => a.position - b.position)[0];
@@ -51,7 +55,7 @@ function toItemDTO(item: CartWithItems["items"][number]): CartItemDTO {
         unitPriceMinor: product.priceMinor.toString(),
         currency: product.currency,
         imageUrl: cover?.url ?? null,
-        stock: product.stock,
+        stock: availableStock(product),
         isActive: product.isActive && product.category.isActive,
         lineTotalMinor: lineTotal.toString(),
     };
@@ -96,7 +100,7 @@ export const cartService = {
     ): Promise<CartDTO> {
         const product = await prisma.product.findUnique({
             where: { id: productId, deletedAt: null },
-            select: { id: true, isActive: true, stock: true, category: { select: { isActive: true } } },
+            select: { id: true, isActive: true, physicalStock: true, reservedQty: true, category: { select: { isActive: true } } },
         });
         if (!product) throw AppError.notFound("NOT_FOUND", "Product not found");
         if (!product.isActive || !product.category.isActive) {
@@ -104,6 +108,7 @@ export const cartService = {
         }
 
         const cart = await getOrCreateCart(userId);
+        const avail = availableStock(product);
 
         // Atomic increment avoids the TOCTOU window where two concurrent
         // requests both read the old quantity, add their delta, and write
@@ -114,17 +119,17 @@ export const cartService = {
             update: { quantity: { increment: quantity } },
         });
 
-        // Guarded clamp: only updates if quantity still exceeds stock (another
-        // request may have removed items in between, making this a no-op).
-        if (item.quantity > product.stock) {
+        // Guarded clamp: only updates if quantity still exceeds available stock
+        // (another request may have removed items in between, making this a no-op).
+        if (item.quantity > avail) {
             const clamped = await prisma.cartItem.updateMany({
-                where: { id: item.id, quantity: { gt: product.stock } },
-                data: { quantity: product.stock },
+                where: { id: item.id, quantity: { gt: avail } },
+                data: { quantity: avail },
             });
             if (clamped.count > 0) {
                 throw AppError.conflict(
                     "INSUFFICIENT_STOCK",
-                    `Only ${product.stock} in stock`,
+                    `Only ${avail} in stock`,
                 );
             }
         }
@@ -152,15 +157,16 @@ export const cartService = {
         } else {
             const product = await prisma.product.findUnique({
                 where: { id: productId, deletedAt: null },
-                select: { stock: true, isActive: true, category: { select: { isActive: true } } },
+                select: { physicalStock: true, reservedQty: true, isActive: true, category: { select: { isActive: true } } },
             });
             if (!product || !product.isActive || !product.category.isActive) {
                 throw AppError.badRequest("PRODUCT_INACTIVE", "Product is not available");
             }
-            if (quantity > product.stock) {
+            const avail = availableStock(product);
+            if (quantity > avail) {
                 throw AppError.conflict(
                     "INSUFFICIENT_STOCK",
-                    `Only ${product.stock} in stock`,
+                    `Only ${avail} in stock`,
                 );
             }
             await prisma.cartItem.update({
@@ -215,10 +221,11 @@ export const cartService = {
                     `Product "${item.product.name}" is no longer available`,
                 );
             }
-            if (item.quantity > item.product.stock) {
+            const avail = availableStock(item.product);
+            if (item.quantity > avail) {
                 throw AppError.conflict(
                     "INSUFFICIENT_STOCK",
-                    `Only ${item.product.stock} of "${item.product.name}" in stock`,
+                    `Only ${avail} of "${item.product.name}" in stock`,
                 );
             }
         }

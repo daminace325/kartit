@@ -44,7 +44,7 @@ describe("Orders API", () => {
     describe("POST /orders", () => {
         it("creates an order with shipping address", async () => {
             const { token } = await createTestUser();
-            const product = await createTestProduct({ stock: 50 });
+            const product = await createTestProduct({ physicalStock: 50 });
             await addToCart(token, product.id, 3);
             const addrRes = await createAddress(token);
             const addressId = addrRes.body.address.id;
@@ -61,11 +61,12 @@ describe("Orders API", () => {
             expect(res.body.order.items[0].productName).toBe("Test Product");
             expect(res.body.order.items[0].quantity).toBe(3);
 
-            // Stock should be deducted
+            // Stock should be reserved (reservedQty = 3, physicalStock unchanged)
             const updated = await prisma.product.findUnique({
                 where: { id: product.id },
             });
-            expect(updated!.stock).toBe(47);
+            expect(updated!.physicalStock).toBe(50);
+            expect(updated!.reservedQty).toBe(3);
 
             // Cart should be empty
             const cartRes = await request(app)
@@ -92,7 +93,7 @@ describe("Orders API", () => {
 
         it("supports idempotency via Idempotency-Key header", async () => {
             const { token } = await createTestUser();
-            const product = await createTestProduct({ stock: 50 });
+            const product = await createTestProduct({ physicalStock: 50 });
             await addToCart(token, product.id, 2);
             const addrRes = await createAddress(token);
             const addressId = addrRes.body.address.id;
@@ -114,18 +115,19 @@ describe("Orders API", () => {
             expect(res2.status).toBe(201);
             expect(res2.body.order.id).toBe(orderId);
 
-            // Stock should only be deducted once
+            // Stock should only be reserved once
             const updated = await prisma.product.findUnique({
                 where: { id: product.id },
             });
-            expect(updated!.stock).toBe(48); // 50 - 2, not 50 - 4
+            expect(updated!.physicalStock).toBe(50);
+            expect(updated!.reservedQty).toBe(2); // 2 reserved, not 4
         });
     });
 
     describe("GET /orders", () => {
         it("lists user's orders", async () => {
             const { token } = await createTestUser();
-            const product = await createTestProduct({ stock: 50 });
+            const product = await createTestProduct({ physicalStock: 50 });
             await addToCart(token, product.id, 2);
             const addrRes = await createAddress(token);
 
@@ -146,7 +148,7 @@ describe("Orders API", () => {
 
         it("another user cannot see someone else's orders", async () => {
             const user1 = await createTestUser({ email: "u1@example.com" });
-            const product = await createTestProduct({ stock: 50 });
+            const product = await createTestProduct({ physicalStock: 50 });
             await addToCart(user1.token, product.id, 2);
             const addrRes = await createAddress(user1.token);
 
@@ -168,7 +170,7 @@ describe("Orders API", () => {
     describe("POST /orders/:id/cancel", () => {
         it("cancels a PENDING order and restores stock", async () => {
             const { token } = await createTestUser();
-            const product = await createTestProduct({ stock: 50 });
+            const product = await createTestProduct({ physicalStock: 50 });
             await addToCart(token, product.id, 5);
             const addrRes = await createAddress(token);
 
@@ -188,16 +190,17 @@ describe("Orders API", () => {
             expect(cancelRes.status).toBe(200);
             expect(cancelRes.body.order.status).toBe(OrderStatus.CANCELLED);
 
-            // Stock restored
+            // Stock restored — reservation released, physicalStock unchanged
             const updated = await prisma.product.findUnique({
                 where: { id: product.id },
             });
-            expect(updated!.stock).toBe(50);
+            expect(updated!.physicalStock).toBe(50);
+            expect(updated!.reservedQty).toBe(0);
         });
 
         it("does not allow cancelling a non-PENDING order", async () => {
             const { token } = await createTestUser();
-            const product = await createTestProduct({ stock: 50 });
+            const product = await createTestProduct({ physicalStock: 50 });
             await addToCart(token, product.id, 1);
             const addrRes = await createAddress(token);
 

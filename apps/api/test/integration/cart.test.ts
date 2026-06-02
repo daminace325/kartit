@@ -65,7 +65,7 @@ describe("Cart API", () => {
 
         it("clamps at available stock", async () => {
             const { token } = await createTestUser();
-            const product = await createTestProduct({ stock: 3 });
+            const product = await createTestProduct({ physicalStock: 3 });
 
             const res = await addToCart(token, product.id, 5);
 
@@ -88,7 +88,7 @@ describe("Cart API", () => {
     describe("PATCH /cart/items/:productId", () => {
         it("updates quantity", async () => {
             const { token } = await createTestUser();
-            const product = await createTestProduct({ stock: 50 });
+            const product = await createTestProduct({ physicalStock: 50 });
 
             await addToCart(token, product.id, 2);
             const res = await request(app)

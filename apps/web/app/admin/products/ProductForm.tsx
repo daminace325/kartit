@@ -28,7 +28,8 @@ type Props = {
         | "description"
         | "priceMinor"
         | "currency"
-        | "stock"
+        | "physicalStock"
+        | "reservedQty"
         | "isActive"
         | "categoryId"
         | "images"
@@ -51,8 +52,8 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
         initial?.priceMinor !== undefined ? minorToMajor(initial.priceMinor, initialCurrency) : "",
     );
     const [currency, setCurrency] = useState(initialCurrency);
-    const [stock, setStock] = useState<string>(
-        initial?.stock !== undefined ? String(initial.stock) : "0",
+    const [physicalStock, setPhysicalStock] = useState<string>(
+        initial?.physicalStock !== undefined ? String(initial.physicalStock) : "0",
     );
     const [categoryId, setCategoryId] = useState<string>(
         initial?.categoryId ?? categoryOptions[0]?.id ?? "",
@@ -125,9 +126,9 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
             setError("Price must be a valid number (e.g. 19.99)");
             return;
         }
-        const stockNum = Number(stock);
-        if (!Number.isInteger(stockNum) || stockNum < 0) {
-            setError("Stock must be a non-negative integer");
+        const physicalStockNum = Number(physicalStock);
+        if (!Number.isInteger(physicalStockNum) || physicalStockNum < 0) {
+            setError("Physical stock must be a non-negative integer");
             return;
         }
         if (!categoryId) {
@@ -151,7 +152,7 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
                     description: description.trim(),
                     priceMinor: Number(priceMinor),
                     currency: currency.trim().toUpperCase(),
-                    stock: stockNum,
+                    physicalStock: physicalStockNum,
                     isActive,
                     categoryId,
                     images: images.map((i) => ({
@@ -257,15 +258,15 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
                 </div>
                 <div>
                     <label className="mb-1 block text-sm font-medium text-slate-200">
-                        Stock
+                        Physical Stock
                     </label>
                     <input
                         type="number"
                         min="0"
                         step="1"
                         required
-                        value={stock}
-                        onChange={(e) => setStock(e.target.value)}
+                        value={physicalStock}
+                        onChange={(e) => setPhysicalStock(e.target.value)}
                         className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-white outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                     />
                 </div>

@@ -33,7 +33,9 @@ function toProductDTO(p: ProductWithImages): ProductDTO {
         description: p.description,
         priceMinor: p.priceMinor.toString(),
         currency: p.currency,
-        stock: p.stock,
+        physicalStock: p.physicalStock,
+        reservedQty: p.reservedQty,
+        stock: p.physicalStock - p.reservedQty,
         isActive: p.isActive,
         categoryId: p.categoryId,
         images: [...p.images]
