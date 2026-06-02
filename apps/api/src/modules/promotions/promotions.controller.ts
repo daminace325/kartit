@@ -12,8 +12,9 @@ function userIdOrThrow(req: Parameters<RequestHandler>[0]): string {
 
 export const listPromotions = asyncHandler(async (req, res) => {
     const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
-    const result = await promotionsService.list(cursor, Math.min(limit, 50));
+    const limitRaw = parseInt(req.query.limit as string, 10);
+    const limit = !isNaN(limitRaw) ? Math.min(limitRaw, 50) : 20;
+    const result = await promotionsService.list(cursor, limit);
     res.json(result);
 });
 

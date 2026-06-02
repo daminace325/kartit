@@ -104,10 +104,12 @@ export const rejectRefundRequest = asyncHandler(async (req, res) => {
 
 export const listRefundRequests = asyncHandler(async (req, res) => {
     const query = req.query as { status?: string; cursor?: string; limit?: string };
+    const limitRaw = parseInt(query.limit as string, 10);
+    const limit = !isNaN(limitRaw) ? Math.min(limitRaw, 50) : undefined;
     const result = await refundRequestService.list({
         status: query.status,
         cursor: query.cursor,
-        limit: query.limit ? parseInt(query.limit, 10) : undefined,
+        limit,
     });
     res.json(result);
 });
