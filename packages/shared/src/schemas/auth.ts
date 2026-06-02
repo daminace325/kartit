@@ -1,14 +1,14 @@
 import { z } from "../lib/zod";
 
 export const signupSchema = z.object({
-    email: z.email(),
+    email: z.string().email(),
     password: z.string().min(8).max(100),
     name: z.string().min(1).max(80).optional(),
 });
 export type SignupInput = z.infer<typeof signupSchema>;
 
 export const signinSchema = z.object({
-    email: z.email(),
+    email: z.string().email(),
     password: z.string().min(1),
 });
 export type SigninInput = z.infer<typeof signinSchema>;
