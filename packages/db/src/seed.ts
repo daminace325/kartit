@@ -43,7 +43,7 @@ const USERS = [
     email: "admin@test.com",
     password: "admin123",
     name: "Admin",
-    role: "ADMIN" as const,
+    role: UserRole.ADMIN,
   },
   {
     email: "damin@test.com",
@@ -792,6 +792,7 @@ async function seedCatalog() {
             currency: CURRENCY,
             physicalStock: prod.physicalStock,
             isActive: true,
+            deletedAt: null,
             categoryId: child.id,
           },
           create: {
@@ -802,7 +803,9 @@ async function seedCatalog() {
             priceMinor: prod.priceMinor,
             currency: CURRENCY,
             physicalStock: prod.physicalStock,
+            reservedQty: 0,
             isActive: true,
+            deletedAt: null,
             categoryId: child.id,
           },
         });
