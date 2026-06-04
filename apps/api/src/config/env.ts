@@ -71,4 +71,6 @@ export const env = {
     STRIPE_CURRENCY: (process.env.STRIPE_CURRENCY ?? "USD").toUpperCase(),
 
     REDIS_URL,
+
+    DISABLE_RATE_LIMITING: process.env.DISABLE_RATE_LIMITING === "true",
 };

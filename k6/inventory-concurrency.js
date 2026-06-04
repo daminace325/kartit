@@ -25,7 +25,7 @@
  */
 
 import http from "k6/http";
-import { check, group, sleep } from "k6";
+import { check, sleep } from "k6";
 import { Counter, Trend } from "k6/metrics";
 
 // ─── Config ────────────────────────────────────────────────────────────
@@ -60,6 +60,13 @@ export const options = {
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
+function extractCookie(res, cookieName) {
+  const setCookie = res.headers["Set-Cookie"];
+  if (!setCookie) return null;
+  const match = setCookie.match(new RegExp(`${cookieName}=([^;]+)`));
+  return match ? match[1] : null;
+}
+
 function signup(vuId) {
     const email = `k6-concurrency-${vuId}-${Date.now()}@test.com`;
     const res = http.post(
@@ -69,7 +76,7 @@ function signup(vuId) {
             password: "k6test123",
             name: `K6 User ${vuId}`,
         }),
-        { headers: { "Content-Type": "application/json" } },
+        { headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" } },
     );
     return res;
 }
@@ -115,7 +122,7 @@ function addToCart(token, productId, quantity) {
     );
 }
 
-function createOrder(token, addressId) {
+function createOrder(token, addressId, idemKey) {
     const start = Date.now();
     const res = http.post(
         `${API_BASE}/orders`,
@@ -125,6 +132,7 @@ function createOrder(token, addressId) {
                 "Content-Type": "application/json",
                 Cookie: `ecomm_auth=${token}`,
                 "X-Requested-With": "fetch",
+                "Idempotency-Key": idemKey,
             },
         },
     );
@@ -133,63 +141,67 @@ function createOrder(token, addressId) {
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────
+//
+// Flat sequential flow with top-level early returns — NOT wrapped in group()
+// because `return` inside a k6 group callback only exits the group, not the
+// default function.
 
 export default function () {
     const vuId = __VU;
-    const iterationId = __ITER;
+    const iterId = __ITER;
+    const idemKey = `k6-concurrency-${vuId}-${iterId}-${Date.now()}`;
 
-    // Unique per-VU idempotency key so retries don't duplicate
-    const idemKey = `k6-checkout-${vuId}-${iterationId}`;
+    // ── 1. Signup ──────────────────────────────────────────────────
 
-    group("setup", () => {
-        // 1. Sign up
-        const signupRes = signup(`${vuId}-${iterationId}`);
-        const signupOk = check(signupRes, { "signup 201": (r) => r.status === 201 });
-        if (!signupOk) return;
+    const signupRes = signup(`${vuId}-${iterId}`);
+    const signupOk = check(signupRes, { "signup 201": (r) => r.status === 201 });
+    if (!signupOk) return;
 
-        const token = signupRes.json("token");
-        if (!token) return;
+    const token = extractCookie(signupRes, "ecomm_auth");
+    if (!token) return;
 
-        // 2. Create shipping address
-        const addrRes = createAddress(token);
-        const addrOk = check(addrRes, { "address 201": (r) => r.status === 201 });
-        if (!addrOk) return;
+    // ── 2. Create shipping address ──────────────────────────────────
 
-        const addressId = addrRes.json("address.id");
-        if (!addressId) return;
+    const addrRes = createAddress(token);
+    const addrOk = check(addrRes, { "address 201": (r) => r.status === 201 });
+    if (!addrOk) return;
 
-        // 3. Get product
-        const productRes = getProductBySlug();
-        const productOk = check(productRes, { "product 200": (r) => r.status === 200 });
-        if (!productOk) return;
+    const addressId = addrRes.json("address.id");
+    if (!addressId) return;
 
-        const productId = productRes.json("product.id");
-        if (!productId) return;
+    // ── 3. Get product ──────────────────────────────────────────────
 
-        // 4. Add to cart (quantity 1)
-        const cartRes = addToCart(token, productId, 1);
-        const cartOk = check(cartRes, { "cart add 201": (r) => r.status === 201 });
-        if (!cartOk) return;
+    const productRes = getProductBySlug();
+    const productOk = check(productRes, { "product 200": (r) => r.status === 200 });
+    if (!productOk) return;
 
-        // 5. Create order — the concurrency gate
-        const orderRes = createOrder(token, addressId);
+    const productId = productRes.json("product.id");
+    if (!productId) return;
 
-        if (orderRes.status === 201) {
-            ordersCreated.add(1);
-            check(orderRes, { "order created": true });
-        } else if (orderRes.status === 409) {
-            ordersRejected.add(1);
-            // Expected: INSUFFICIENT_STOCK for 190 out of 200 users
-            check(orderRes, {
-                "order rejected (insufficient stock)": (r) =>
-                    r.json("error.code") === "INSUFFICIENT_STOCK",
-            });
-        } else {
-            console.error(
-                `Unexpected order status ${orderRes.status}: ${orderRes.body}`,
-            );
-        }
-    });
+    // ── 4. Add to cart ──────────────────────────────────────────────
+
+    const cartRes = addToCart(token, productId, 1);
+    const cartOk = check(cartRes, { "cart add 201": (r) => r.status === 201 });
+    if (!cartOk) return;
+
+    // ── 5. Create order — the concurrency gate ──────────────────────
+
+    const orderRes = createOrder(token, addressId, idemKey);
+
+    if (orderRes.status === 201) {
+        ordersCreated.add(1);
+        check(orderRes, { "order created": true });
+    } else if (orderRes.status === 409) {
+        ordersRejected.add(1);
+        check(orderRes, {
+            "order rejected (insufficient stock)": (r) =>
+                r.json("error.code") === "INSUFFICIENT_STOCK",
+        });
+    } else {
+        console.error(
+            `Unexpected order status ${orderRes.status}: ${orderRes.body}`,
+        );
+    }
 
     sleep(0.1);
 }
