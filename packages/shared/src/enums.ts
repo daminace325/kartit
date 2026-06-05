@@ -26,3 +26,27 @@ export const PaymentStatus = {
     REFUNDED: "REFUNDED",
 } as const;
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
+
+// ── Inventory lifecycle constants ─────────────────────────────────
+
+/**
+ * Statuses for which inventory is held (reservedQty has been incremented).
+ * Transitioning from one of these into a release status restores stock.
+ */
+export const STOCK_HELD: ReadonlySet<OrderStatus> = new Set([
+    OrderStatus.PENDING,
+    OrderStatus.PAID,
+    OrderStatus.PROCESSING,
+    OrderStatus.SHIPPED,
+    OrderStatus.DELIVERED,
+]);
+
+/**
+ * Statuses that release held inventory — either by moving reservedQty
+ * back to available, or by incrementing physicalStock for returns.
+ */
+export const STOCK_RELEASE: ReadonlySet<OrderStatus> = new Set([
+    OrderStatus.CANCELLED,
+    OrderStatus.FAILED,
+    OrderStatus.REFUNDED,
+]);

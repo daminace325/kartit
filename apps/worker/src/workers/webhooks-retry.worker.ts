@@ -1,8 +1,9 @@
 import { Worker } from "bullmq";
-import { prisma } from "@repo/db";
+import { prisma, restoreInventory } from "@repo/db";
 import {
     OrderStatus,
     PaymentStatus,
+    STOCK_HELD,
 } from "@repo/shared";
 import { REDIS_URL } from "../lib/redis";
 
@@ -14,19 +15,11 @@ import { REDIS_URL } from "../lib/redis";
  * extracts the Stripe event data, and re-attempts the business-logic
  * side effects (order/payment status transitions, inventory, outbox).
  *
+ * Inventory-release logic is imported from @repo/db/inventory so it
+ * stays identical to the API's code path — no duplication.
+ *
  * Weaveraged from P2.3 log-only skeleton to fully wired in P2.9.
  */
-
-// Statuses for which inventory is held (the "stock-is-out" set).
-// Duplicated here so the worker stays self-contained — the canonical
-// definition lives in apps/api.
-const STOCK_HELD: readonly OrderStatus[] = [
-    OrderStatus.PENDING,
-    OrderStatus.PAID,
-    OrderStatus.PROCESSING,
-    OrderStatus.SHIPPED,
-    OrderStatus.DELIVERED,
-];
 
 // ── Handler helpers ────────────────────────────────────────────
 
@@ -140,13 +133,8 @@ async function handlePaymentIntentFailed(
             },
         });
 
-        // Release reservation
-        for (const item of order.items) {
-            await tx.product.update({
-                where: { id: item.productId },
-                data: { reservedQty: { decrement: item.quantity } },
-            });
-        }
+        // Release reservation — canonical helper from @repo/db
+        await restoreInventory(tx, order.items);
 
         await tx.outbox.create({
             data: {
@@ -189,7 +177,7 @@ async function handleChargeRefunded(
     const order = payment.order;
 
     if (payment.status !== PaymentStatus.SUCCEEDED) return;
-    if (!STOCK_HELD.includes(order.status as OrderStatus)) return;
+    if (!STOCK_HELD.has(order.status as OrderStatus)) return;
 
     await prisma.$transaction(async (tx) => {
         const flipped = await tx.order.updateMany({
@@ -207,19 +195,8 @@ async function handleChargeRefunded(
             order.status === OrderStatus.SHIPPED ||
             order.status === OrderStatus.DELIVERED;
 
-        for (const item of order.items) {
-            if (wasShipped) {
-                await tx.product.update({
-                    where: { id: item.productId },
-                    data: { physicalStock: { increment: item.quantity } },
-                });
-            } else {
-                await tx.product.update({
-                    where: { id: item.productId },
-                    data: { reservedQty: { decrement: item.quantity } },
-                });
-            }
-        }
+        // Release/return inventory — canonical helper from @repo/db
+        await restoreInventory(tx, order.items, wasShipped);
 
         await tx.outbox.create({
             data: {

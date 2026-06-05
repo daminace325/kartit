@@ -6,6 +6,8 @@ import {
     ErrorCode,
     OrderStatus,
     PaymentStatus,
+    STOCK_HELD,
+    STOCK_RELEASE,
     VALID_STATUS_TRANSITIONS,
     type OrderDTO,
     type OrderCreateInput,
@@ -14,6 +16,7 @@ import {
     type OrderListResponse,
     type CreateOrderResponse,
 } from "@repo/shared";
+import { restoreInventory, shipInventory } from "@repo/db";
 import { AppError } from "../../lib/errors";
 import { env } from "../../config/env";
 import { getStripe } from "../../lib/stripe";
@@ -36,20 +39,11 @@ export const ORDER_INCLUDE = {
     items: { orderBy: { id: "asc" as const } },
 } satisfies Prisma.OrderInclude;
 
-// Statuses for which inventory has already been deducted.
-// Transitioning from one of these into a release status restores stock.
-export const STOCK_HELD: ReadonlySet<OrderStatus> = new Set([
-    OrderStatus.PENDING,
-    OrderStatus.PAID,
-    OrderStatus.PROCESSING,
-    OrderStatus.SHIPPED,
-    OrderStatus.DELIVERED,
-]);
-export const STOCK_RELEASE: ReadonlySet<OrderStatus> = new Set([
-    OrderStatus.CANCELLED,
-    OrderStatus.FAILED,
-    OrderStatus.REFUNDED,
-]);
+// Re-exported from canonical sources so existing consumers (orders.payment.service)
+// don't need import-path changes. New consumers should import directly from
+// @repo/shared and @repo/db.
+export { STOCK_HELD, STOCK_RELEASE } from "@repo/shared";
+export { restoreInventory, shipInventory } from "@repo/db";
 
 // Allowed admin-driven status transitions. Customer-initiated cancel uses
 // the dedicated cancel route and is restricted to PENDING in Phase 1.
@@ -201,55 +195,6 @@ async function lockPromotion(
                 "You have already used this promotion",
             );
         }
-    }
-}
-
-/**
- * Release inventory reservation (cancel / fail / refund).
- *
- * - If `wasShipped` is true (order was SHIPPED/DELIVERED), the items physically
- *   return to the warehouse: `physicalStock += quantity`.
- * - Otherwise the items were never shipped, so we just release the reservation:
- *   `reservedQty -= quantity`.
- */
-export async function restoreInventory(
-    tx: Prisma.TransactionClient,
-    items: Array<{ productId: string; quantity: number }>,
-    wasShipped: boolean = false,
-): Promise<void> {
-    for (const item of items) {
-        if (wasShipped) {
-            // Item physically returns — increment physical stock.
-            await tx.product.update({
-                where: { id: item.productId },
-                data: { physicalStock: { increment: item.quantity } },
-            });
-        } else {
-            // Never left the warehouse — just release the reservation.
-            await tx.product.update({
-                where: { id: item.productId },
-                data: { reservedQty: { decrement: item.quantity } },
-            });
-        }
-    }
-}
-
-/**
- * Ship items: decrement both physicalStock AND reservedQty.
- * Items physically leave the warehouse and are no longer reserved.
- */
-export async function shipInventory(
-    tx: Prisma.TransactionClient,
-    items: Array<{ productId: string; quantity: number }>,
-): Promise<void> {
-    for (const item of items) {
-        await tx.product.update({
-            where: { id: item.productId },
-            data: {
-                physicalStock: { decrement: item.quantity },
-                reservedQty: { decrement: item.quantity },
-            },
-        });
     }
 }
 
