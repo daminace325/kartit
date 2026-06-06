@@ -8,10 +8,12 @@ import { AppError } from "../../lib/errors";
 import { getStripe } from "../../lib/stripe";
 import {
     ORDER_INCLUDE,
+    toOrderDTO,
+} from "./orders.dto";
+import {
     restoreInventory,
     STOCK_HELD,
-    toOrderDTO,
-} from "./orders.service";
+} from "./orders.inventory.service";
 
 export const ordersPaymentService = {
     /**

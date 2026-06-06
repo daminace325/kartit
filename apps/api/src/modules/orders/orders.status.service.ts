@@ -5,12 +5,14 @@ import { AppError } from "../../lib/errors";
 import {
     ALLOWED_TRANSITIONS,
     ORDER_INCLUDE,
+    toOrderDTO,
+} from "./orders.dto";
+import {
     restoreInventory,
     shipInventory,
     STOCK_HELD,
     STOCK_RELEASE,
-    toOrderDTO,
-} from "./orders.service";
+} from "./orders.inventory.service";
 
 export const ordersStatusService = {
     async adminUpdateStatus(

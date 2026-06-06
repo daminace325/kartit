@@ -2,7 +2,7 @@ import { prisma } from "@repo/db";
 import { OrderStatus, PaymentStatus } from "@repo/shared";
 import { getStripe } from "../lib/stripe";
 import { logger } from "../lib/logger";
-import { restoreInventory } from "../modules/orders/orders.service";
+import { restoreInventory } from "@repo/db";
 
 const ABANDONED_THRESHOLD_MINUTES = 30;
 

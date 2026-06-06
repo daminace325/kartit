@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import { prisma } from "@repo/db";
 import type { Prisma } from "@repo/db";
 import {
@@ -6,197 +5,27 @@ import {
     ErrorCode,
     OrderStatus,
     PaymentStatus,
-    STOCK_HELD,
-    STOCK_RELEASE,
-    VALID_STATUS_TRANSITIONS,
     type OrderDTO,
     type OrderCreateInput,
-    type OrderItemDTO,
     type OrderListQuery,
     type OrderListResponse,
     type CreateOrderResponse,
 } from "@repo/shared";
-import { restoreInventory, shipInventory } from "@repo/db";
+import { restoreInventory } from "@repo/db";
 import { AppError } from "../../lib/errors";
 import { env } from "../../config/env";
 import { getStripe } from "../../lib/stripe";
 import { promotionsService } from "../promotions/promotions.service";
+import { generateOrderNumber, ORDER_INCLUDE, toOrderDTO } from "./orders.dto";
+import { reserveInventory } from "./orders.inventory.service";
+import { lockPromotion } from "./orders.promotion-lock";
 
-function generateOrderNumber(): string {
-    const today = new Date();
-    const y = today.getFullYear().toString();
-    const m = (today.getMonth() + 1).toString().padStart(2, "0");
-    const d = today.getDate().toString().padStart(2, "0");
-    const suffix = crypto.randomBytes(3).toString("hex").toUpperCase();
-    return `ECM-${y}${m}${d}-${suffix}`;
-}
+// ── Re-exports for backward compatibility ─────────────────────────
+export { ORDER_INCLUDE, toOrderDTO, generateOrderNumber, ALLOWED_TRANSITIONS } from "./orders.dto";
+export { STOCK_HELD, STOCK_RELEASE, restoreInventory, shipInventory, reserveInventory } from "./orders.inventory.service";
+export { lockPromotion } from "./orders.promotion-lock";
 
-type OrderWithItems = Prisma.OrderGetPayload<{
-    include: { items: true };
-}>;
-
-export const ORDER_INCLUDE = {
-    items: { orderBy: { id: "asc" as const } },
-} satisfies Prisma.OrderInclude;
-
-// Re-exported from canonical sources so existing consumers (orders.payment.service)
-// don't need import-path changes. New consumers should import directly from
-// @repo/shared and @repo/db.
-export { STOCK_HELD, STOCK_RELEASE } from "@repo/shared";
-export { restoreInventory, shipInventory } from "@repo/db";
-
-// Allowed admin-driven status transitions. Customer-initiated cancel uses
-// the dedicated cancel route and is restricted to PENDING in Phase 1.
-// Sourced from @repo/shared so the client and server share one definition.
-export const ALLOWED_TRANSITIONS: Record<OrderStatus, ReadonlySet<OrderStatus>> =
-    Object.fromEntries(
-        Object.entries(VALID_STATUS_TRANSITIONS).map(([key, values]) => [
-            key,
-            new Set(values),
-        ]),
-    ) as unknown as Record<OrderStatus, ReadonlySet<OrderStatus>>;
-
-function toItemDTO(item: OrderWithItems["items"][number]): OrderItemDTO {
-    return {
-        id: item.id,
-        productId: item.productId,
-        productName: item.productName,
-        productSlug: item.productSlug,
-        imageUrl: item.imageUrl,
-        unitPriceMinor: item.unitPriceMinor.toString(),
-        currency: item.currency,
-        quantity: item.quantity,
-        totalMinor: item.totalMinor.toString(),
-    };
-}
-
-export function toOrderDTO(order: OrderWithItems): OrderDTO {
-    return {
-        id: order.id,
-        orderNumber: order.orderNumber,
-        userId: order.userId,
-        status: order.status as OrderStatus,
-        subtotalMinor: order.subtotalMinor.toString(),
-        shippingMinor: order.shippingMinor.toString(),
-        taxMinor: order.taxMinor.toString(),
-        discountMinor: order.discountMinor.toString(),
-        totalMinor: order.totalMinor.toString(),
-        currency: order.currency,
-        promotionCode: order.promotionCode,
-        shippingName: order.shippingName,
-        shippingPhone: order.shippingPhone,
-        shippingLine1: order.shippingLine1,
-        shippingLine2: order.shippingLine2,
-        shippingCity: order.shippingCity,
-        shippingState: order.shippingState,
-        shippingPostalCode: order.shippingPostalCode,
-        shippingCountry: order.shippingCountry,
-        items: order.items.map(toItemDTO),
-        paidAt: order.paidAt ? order.paidAt.toISOString() : null,
-        deliveredAt: order.deliveredAt ? order.deliveredAt.toISOString() : null,
-        createdAt: order.createdAt.toISOString(),
-        updatedAt: order.updatedAt.toISOString(),
-    };
-}
-
-/**
- * Reserve inventory for newly created orders. Takes `pg_advisory_xact_lock`
- * on each product (sorted by ID to prevent deadlocks), then atomically checks
- * availability and increments `reservedQty`. The lock is held until the
- * surrounding transaction commits or rolls back, guaranteeing serialized
- * access to each product's reservation slot.
- */
-export async function reserveInventory(
-    tx: Prisma.TransactionClient,
-    items: Array<{ productId: string; quantity: number; productName: string }>,
-): Promise<void> {
-    // Sort by product ID to prevent deadlocks when multiple transactions
-    // lock the same set of products in different order.
-    const sorted = [...items].sort((a, b) => a.productId.localeCompare(b.productId));
-
-    for (const it of sorted) {
-        // Transaction-level advisory lock — auto-released on commit/rollback.
-        // $executeRawUnsafe is used because pg_advisory_xact_lock returns void,
-        // which Prisma's $queryRawUnsafe (designed for row-returning queries)
-        // cannot deserialize.
-        await tx.$executeRawUnsafe(
-            `SELECT pg_advisory_xact_lock(hashtext($1))`,
-            it.productId,
-        );
-
-        // Read under lock — no other tx can change reservedQty for this product.
-        const product = await tx.product.findUniqueOrThrow({
-            where: { id: it.productId, deletedAt: null },
-            select: { physicalStock: true, reservedQty: true },
-        });
-
-        const available = product.physicalStock - product.reservedQty;
-        if (available < it.quantity) {
-            throw AppError.conflict(
-                "INSUFFICIENT_STOCK",
-                `Insufficient stock for "${it.productName}"`,
-            );
-        }
-
-        await tx.product.update({
-            where: { id: it.productId },
-            data: { reservedQty: { increment: it.quantity } },
-        });
-    }
-}
-
-/**
- * Serialise promotion usage checks inside the order-creation transaction so
- * concurrent checkouts cannot oversell a limited-usage promotion. Uses the
- * same pg_advisory_xact_lock pattern as reserveInventory; the lock is
- * auto-released on commit/rollback.
- */
-async function lockPromotion(
-    tx: Prisma.TransactionClient,
-    promotionId: string,
-    userId: string,
-): Promise<void> {
-    await tx.$executeRawUnsafe(
-        `SELECT pg_advisory_xact_lock(hashtext($1))`,
-        promotionId,
-    );
-
-    const invalidStatuses: OrderStatus[] = [
-        OrderStatus.CANCELLED,
-        OrderStatus.FAILED,
-        OrderStatus.REFUNDED,
-    ];
-
-    const promo = await tx.promotion.findUnique({
-        where: { id: promotionId },
-        select: { maxUses: true, maxUsesPerUser: true },
-    });
-    if (!promo) return; // deleted between fast-path check and transaction
-
-    if (promo.maxUses !== null) {
-        const totalCount = await tx.order.count({
-            where: { promotionId, status: { notIn: invalidStatuses } },
-        });
-        if (totalCount >= promo.maxUses) {
-            throw AppError.conflict(
-                "PROMOTION_EXHAUSTED",
-                "Promotion usage limit reached",
-            );
-        }
-    }
-
-    if (promo.maxUsesPerUser !== null) {
-        const userCount = await tx.order.count({
-            where: { promotionId, userId, status: { notIn: invalidStatuses } },
-        });
-        if (userCount >= promo.maxUsesPerUser) {
-            throw AppError.conflict(
-                "PROMOTION_EXHAUSTED",
-                "You have already used this promotion",
-            );
-        }
-    }
-}
+// ── Order CRUD ────────────────────────────────────────────────────
 
 export const ordersService = {
     async create(

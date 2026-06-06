@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { OrderStatus } from "@repo/shared";
-import { ALLOWED_TRANSITIONS } from "../../src/modules/orders/orders.service";
+import { ALLOWED_TRANSITIONS } from "../../src/modules/orders/orders.dto";
 
 describe("Order status transitions", () => {
     const allowedPairs = Object.entries(ALLOWED_TRANSITIONS).flatMap(
