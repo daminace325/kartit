@@ -9,7 +9,7 @@
  *      payments → order items → refund requests → webhookEvents →
  *      outbox/ledger entries → orders → cart items → carts → addresses →
  *      users).
- *   2. Resets all product stock (physicalStock → 25, reservedQty → 0).
+ *   2. Resets all product stock (physicalStock → 1000, reservedQty → 0).
  *
  * Idempotent: safe to run multiple times — no k6 data → nothing happens.
  */
@@ -33,7 +33,7 @@ async function main() {
     console.log("  No k6 test data found — nothing to clean up.");
     console.log("  Resetting product stock anyway...");
     const reset = await prisma.$executeRawUnsafe(
-      `UPDATE "Product" SET "physicalStock" = 25, "reservedQty" = 0`,
+      `UPDATE "Product" SET "physicalStock" = 1000, "reservedQty" = 0`,
     );
     console.log(`  Product stock reset: ${reset} rows\n`);
     console.log("Done.");
@@ -140,9 +140,9 @@ async function main() {
   // ── 12. Reset product stock ───────────────────────────────────────
 
   const stockReset = await prisma.$executeRawUnsafe(
-    `UPDATE "Product" SET "physicalStock" = 25, "reservedQty" = 0`,
+    `UPDATE "Product" SET "physicalStock" = 1000, "reservedQty" = 0`,
   );
-  console.log(`\n  Product stock → 25, reservedQty → 0   (${stockReset} rows)`);
+  console.log(`\n  Product stock → 1000, reservedQty → 0   (${stockReset} rows)`);
 
   console.log("\nDone — database is back to seed state.");
 }
