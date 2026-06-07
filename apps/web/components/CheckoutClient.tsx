@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Loader2, X } from "lucide-react";
 import { Elements } from "@stripe/react-stripe-js";
-import { formatMoney, type AddressDTO, type CartSummaryDTO } from "@repo/shared";
+import { formatMoney, type AddressDTO } from "@repo/shared";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { PayForm } from "@/components/payment/PayForm";
 import { useIdempotencyKey } from "@/hooks/useIdempotencyKey";
 import { useStripeCheckout } from "@/hooks/useStripeCheckout";
-import { apiFetch, ApiClientError } from "@/services/apiClient";
+import { usePromoCode } from "@/hooks/usePromoCode";
 
 type Row = {
     productId: string;
@@ -56,16 +56,30 @@ export default function CheckoutClient(props: Props) {
     const [selectedAddressId, setSelectedAddressId] = useState(
         addresses[0]?.id ?? "",
     );
-    const [promoCode, setPromoCode] = useState(initialPromoCode ?? "");
-    const [promoInput, setPromoInput] = useState(initialPromoCode ?? "");
-    const [applying, setApplying] = useState(false);
-    const [promoError, setPromoError] = useState<string | null>(null);
     const [localDiscountMinor, setLocalDiscountMinor] = useState(discountMinor);
     const [localDiscountNote, setLocalDiscountNote] = useState(discountNote);
     const [localTotalMinor, setLocalTotalMinor] = useState(totalMinor);
     const [localShippingMinor, setLocalShippingMinor] = useState(shippingMinor);
     const [localTaxMinor, setLocalTaxMinor] = useState(taxMinor);
-    const generationRef = useRef(0);
+
+    const {
+        promoCode,
+        promoInput,
+        setPromoInput,
+        applying,
+        promoError,
+        clearError,
+        applyPromo,
+    } = usePromoCode({
+        initialCode: initialPromoCode,
+        onSuccess: (data) => {
+            setLocalDiscountMinor(data.discountMinor);
+            setLocalDiscountNote(data.discountNote);
+            setLocalTotalMinor(data.totalMinor);
+            setLocalShippingMinor(data.shippingMinor);
+            setLocalTaxMinor(data.taxMinor);
+        },
+    });
 
     const { getBaseKey, clearKey } = useIdempotencyKey({
         currency,
@@ -80,37 +94,6 @@ export default function CheckoutClient(props: Props) {
     const handleStartPayment = () => {
         startPayment(getBaseKey(), selectedAddressId, promoCode || undefined);
     };
-
-    const applyPromo = useCallback(async (code: string) => {
-        const trimmed = code.trim();
-        const gen = ++generationRef.current;
-        setApplying(true);
-        setPromoError(null);
-        try {
-            const data = await apiFetch<CartSummaryDTO>("/cart/summary", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(trimmed ? { promotionCode: trimmed } : {}),
-            });
-            if (generationRef.current !== gen) return;
-            setPromoCode(data.promotionCode ?? trimmed);
-            setPromoInput(data.promotionCode ?? trimmed);
-            setLocalDiscountMinor(data.discountMinor);
-            setLocalDiscountNote(data.discountNote);
-            setLocalTotalMinor(data.totalMinor);
-            setLocalShippingMinor(data.shippingMinor);
-            setLocalTaxMinor(data.taxMinor);
-        } catch (err) {
-            if (generationRef.current !== gen) return;
-            if (err instanceof ApiClientError) {
-                setPromoError(err.message);
-            } else {
-                setPromoError("Failed to apply promo code");
-            }
-        } finally {
-            if (generationRef.current === gen) setApplying(false);
-        }
-    }, []);
 
     const displayDiscount = localDiscountMinor;
     const hasDiscount = BigInt(displayDiscount) > 0n;
@@ -247,7 +230,7 @@ export default function CheckoutClient(props: Props) {
                                     value={promoInput}
                                     onChange={(e) => {
                                         setPromoInput(e.target.value);
-                                        setPromoError(null);
+                                        clearError();
                                     }}
                                     onKeyDown={(e) => {
                                         if (e.key === "Enter") {

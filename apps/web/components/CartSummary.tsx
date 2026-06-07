@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, X } from "lucide-react";
 import { formatMoney, type CartSummaryDTO } from "@repo/shared";
-import { apiFetch, ApiClientError } from "@/services/apiClient";
+import { usePromoCode } from "@/hooks/usePromoCode";
 
 type Props = {
     initialSummary: CartSummaryDTO;
@@ -15,66 +15,24 @@ type Props = {
 export default function CartSummary({ initialSummary, totalQty }: Props) {
     const router = useRouter();
     const [summary, setSummary] = useState<CartSummaryDTO>(initialSummary);
-    const [promoInput, setPromoInput] = useState(summary.promotionCode ?? "");
-    const [applying, setApplying] = useState(false);
-    const [promoError, setPromoError] = useState<string | null>(null);
-    const generationRef = useRef(0);
 
-    const applyPromo = useCallback(async (code: string) => {
-        const trimmed = code.trim();
-        const gen = ++generationRef.current;
-
-        if (!trimmed) {
-            setApplying(true);
-            setPromoError(null);
-            try {
-                const data = await apiFetch<CartSummaryDTO>("/cart/summary", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({}),
-                });
-                if (generationRef.current !== gen) return;
-                setSummary(data);
-                setPromoInput("");
-            } catch {
-                if (generationRef.current !== gen) return;
-                setPromoError("Failed to remove promo code");
-            } finally {
-                if (generationRef.current === gen) setApplying(false);
-            }
-            return;
-        }
-
-        setApplying(true);
-        setPromoError(null);
-        try {
-            const data = await apiFetch<CartSummaryDTO>("/cart/summary", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ promotionCode: trimmed }),
-            });
-            if (generationRef.current !== gen) return;
+    const {
+        promoCode,
+        promoInput,
+        setPromoInput,
+        applying,
+        promoError,
+        clearError,
+        applyPromo,
+    } = usePromoCode({
+        initialCode: summary.promotionCode ?? undefined,
+        onSuccess: (data) => {
             setSummary(data);
-            setPromoInput(data.promotionCode ?? trimmed);
-        } catch (err) {
-            if (generationRef.current !== gen) return;
-            if (err instanceof ApiClientError) {
-                setPromoError(err.message);
-            } else {
-                setPromoError("Failed to apply promo code");
-            }
-        } finally {
-            if (generationRef.current === gen) {
-                setApplying(false);
-                router.refresh();
-            }
-        }
-    }, [router]);
+            router.refresh();
+        },
+    });
 
-    const handleApply = () => applyPromo(promoInput);
-    const handleRemove = () => applyPromo("");
-
-    const hasPromo = !!summary.promotionCode;
+    const hasPromo = !!promoCode;
 
     return (
         <aside className="h-fit rounded-md border border-slate-700 bg-slate-800 p-5">
@@ -149,11 +107,11 @@ export default function CartSummary({ initialSummary, totalQty }: Props) {
                 {hasPromo ? (
                     <div className="flex items-center gap-2 rounded border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm">
                         <span className="flex-1 font-medium text-emerald-300">
-                            {summary.promotionCode}
+                            {promoCode}
                         </span>
                         <button
                             type="button"
-                            onClick={handleRemove}
+                            onClick={() => applyPromo("")}
                             disabled={applying}
                             className="text-emerald-400 hover:text-emerald-200"
                             aria-label="Remove promo code"
@@ -172,7 +130,7 @@ export default function CartSummary({ initialSummary, totalQty }: Props) {
                             value={promoInput}
                             onChange={(e) => {
                                 setPromoInput(e.target.value);
-                                setPromoError(null);
+                                clearError();
                             }}
                             onKeyDown={(e) => {
                                 if (e.key === "Enter") {
@@ -186,7 +144,7 @@ export default function CartSummary({ initialSummary, totalQty }: Props) {
                         />
                         <button
                             type="button"
-                            onClick={handleApply}
+                            onClick={() => applyPromo(promoInput)}
                             disabled={applying || !promoInput.trim()}
                             className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-600 disabled:opacity-50"
                         >
@@ -204,7 +162,7 @@ export default function CartSummary({ initialSummary, totalQty }: Props) {
             </div>
 
             <Link
-                href={`/checkout${hasPromo ? `?promo=${encodeURIComponent(summary.promotionCode!)}` : ""}`}
+                href={`/checkout${hasPromo ? `?promo=${encodeURIComponent(promoCode)}` : ""}`}
                 className="mt-5 block rounded-md bg-sky-500 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-sky-400"
             >
                 Proceed to checkout
