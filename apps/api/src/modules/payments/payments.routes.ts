@@ -5,7 +5,7 @@ import { paymentIntentSchema } from "@repo/shared";
 import { validate } from "../../middlewares/validate";
 import { requireAuth } from "../../middlewares/requireAuth";
 import { idempotency } from "../../middlewares/idempotency";
-import { createPaymentIntent, stripeWebhook } from "./payments.controller";
+import { createPaymentIntent, stripeWebhook, testWebhook } from "./payments.controller";
 
 export const paymentsRouter: Router = Router();
 
@@ -16,6 +16,16 @@ paymentsRouter.post(
     "/webhook",
     express.raw({ type: "application/json" }),
     stripeWebhook,
+);
+
+// Test-only webhook endpoint. Accepts plain JSON { paymentIntentId, type }
+// instead of a raw Stripe-signed body. The service layer enforces the
+// STRIPE_WEBHOOK_BYPASS guard — requests are rejected unless the env var
+// is explicitly set. Used by k6 load tests to simulate Stripe webhooks.
+paymentsRouter.post(
+    "/webhook/test",
+    express.json(),
+    testWebhook,
 );
 
 // POST /payments/intent — create Stripe PaymentIntent for an existing order.

@@ -84,7 +84,7 @@ export function createApp() {
     // /payments/webhook is excluded because Stripe sends server-to-server
     // requests without a browser origin or the X-Requested-With header.
     // Mounted before express.json() — CSRF only inspects headers.
-    app.use(csrfMiddleware({ skipPaths: ["/payments/webhook"] }));
+    app.use(csrfMiddleware({ skipPaths: ["/payments/webhook", "/payments/webhook/test"] }));
 
     // Stripe webhook MUST see the raw request body for signature verification.
     // Mounted BEFORE express.json() so the global JSON parser doesn't consume

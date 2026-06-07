@@ -6,8 +6,9 @@
  *
  * What it does:
  *   1. Deletes all k6 test artifacts in FK-safe order (idempotency keys →
- *      payments → order items → refund requests → outbox/ledger entries →
- *      orders → cart items → carts → addresses → users).
+ *      payments → order items → refund requests → webhookEvents →
+ *      outbox/ledger entries → orders → cart items → carts → addresses →
+ *      users).
  *   2. Resets all product stock (physicalStock → 25, reservedQty → 0).
  *
  * Idempotent: safe to run multiple times — no k6 data → nothing happens.
@@ -83,7 +84,14 @@ async function main() {
     });
     console.log(`  RefundRequests:   ${deletedRefunds.count}`);
 
-    // ── 5. Clean up Outbox & Ledger (plain string refs, no FK) ──────
+    // ── 5. Clean up test WebhookEvents (synthetic evt_test_* rows) ──
+
+    const deletedWebhookEvents = await prisma.webhookEvent.deleteMany({
+      where: { eventId: { startsWith: "evt_test_" } },
+    });
+    console.log(`  WebhookEvents:    ${deletedWebhookEvents.count}`);
+
+    // ── 6. Clean up Outbox & Ledger (plain string refs, no FK) ──────
 
     await prisma.$executeRawUnsafe(
       `DELETE FROM "Outbox" WHERE "aggregateId" IN (SELECT id FROM "Order" WHERE "userId" IN (SELECT id FROM "User" WHERE email LIKE '${K6_EMAIL_PREFIX}%'))`,
@@ -94,42 +102,42 @@ async function main() {
     console.log(`  Outbox/Ledger:    cleaned`);
   }
 
-  // ── 6. Delete Orders (User→Order has no onDelete cascade) ─────────
+  // ── 7. Delete Orders (User→Order has no onDelete cascade) ─────────
 
   const deletedOrders = await prisma.order.deleteMany({
     where: { userId: { in: k6UserIds } },
   });
   console.log(`  Orders:           ${deletedOrders.count}`);
 
-  // ── 7. Delete CartItems (via Cart relation) ───────────────────────
+  // ── 8. Delete CartItems (via Cart relation) ───────────────────────
 
   const deletedCartItems = await prisma.cartItem.deleteMany({
     where: { cart: { userId: { in: k6UserIds } } },
   });
   console.log(`  CartItems:        ${deletedCartItems.count}`);
 
-  // ── 8. Delete Carts ───────────────────────────────────────────────
+  // ── 9. Delete Carts ───────────────────────────────────────────────
 
   const deletedCarts = await prisma.cart.deleteMany({
     where: { userId: { in: k6UserIds } },
   });
   console.log(`  Carts:            ${deletedCarts.count}`);
 
-  // ── 9. Delete Addresses (Cascade on FK, explicit for clarity) ─────
+  // ── 10. Delete Addresses (Cascade on FK, explicit for clarity) ────
 
   const deletedAddresses = await prisma.address.deleteMany({
     where: { userId: { in: k6UserIds } },
   });
   console.log(`  Addresses:        ${deletedAddresses.count}`);
 
-  // ── 10. Delete Users ──────────────────────────────────────────────
+  // ── 11. Delete Users ──────────────────────────────────────────────
 
   const deletedUsers = await prisma.user.deleteMany({
     where: { email: { startsWith: K6_EMAIL_PREFIX } },
   });
   console.log(`  Users:            ${deletedUsers.count}`);
 
-  // ── 11. Reset product stock ───────────────────────────────────────
+  // ── 12. Reset product stock ───────────────────────────────────────
 
   const stockReset = await prisma.$executeRawUnsafe(
     `UPDATE "Product" SET "physicalStock" = 25, "reservedQty" = 0`,

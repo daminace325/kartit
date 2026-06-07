@@ -1,0 +1,46 @@
+{
+  "scenario": "default",
+  "vus": 200,
+  "duration": "5m",
+  "timestamp": "2026-06-07T16:11:36.030Z",
+  "checkoutsCompleted": 2761,
+  "ordersCreated": 2761,
+  "ordersRejectedStockout": 1422,
+  "totalHttpRequests": 28655,
+  "testDurationSeconds": 391,
+  "avgRps": 73.3,
+  "httpFailureRate": 0.08448787297155819,
+  "p50": {
+    "signin": 596,
+    "productList": 829,
+    "cartAdd": 2864,
+    "addressCreate": 295,
+    "orderCreate": 4173,
+    "paymentIntent": 0,
+    "webhook": 1738,
+    "fullCheckout": 11316,
+    "httpReq": 1099
+  },
+  "p95": {
+    "signin": 1933,
+    "productList": 1996,
+    "cartAdd": 5248,
+    "addressCreate": 790,
+    "orderCreate": 18497,
+    "paymentIntent": 0,
+    "webhook": 3699,
+    "fullCheckout": 27803,
+    "httpReq": 9390
+  },
+  "p99": {
+    "signin": 2971,
+    "productList": 3259,
+    "cartAdd": 8053,
+    "addressCreate": 1187,
+    "orderCreate": 23261,
+    "paymentIntent": 0,
+    "webhook": 4643,
+    "fullCheckout": 31095,
+    "httpReq": 18001
+  }
+}

@@ -170,6 +170,192 @@ export const paymentsService = {
         return { duplicate: false as const };
     },
 
+    /**
+     * Test-only webhook receiver. Bypasses Stripe signature verification and
+     * accepts a plain JSON body with either:
+     *
+     *   { paymentIntentId: "pi_xxx", type: "..." }
+     *     — standard path; the payment row must already have providerPaymentId set
+     *
+     *   { orderId: "...", type: "..." }
+     *     — for load testing; auto-assigns a synthetic providerPaymentId so the
+     *       test never touches the Stripe API. Use this for max-throughput k6 runs.
+     *
+     * Only available when STRIPE_WEBHOOK_BYPASS=true.
+     */
+    async processTestWebhook(body: {
+        paymentIntentId?: string;
+        orderId?: string;
+        type: string;
+    }) {
+        if (!env.STRIPE_WEBHOOK_BYPASS) {
+            throw AppError.internal(
+                "STRIPE_NOT_CONFIGURED",
+                "Test webhook endpoint is disabled (set STRIPE_WEBHOOK_BYPASS=true)",
+            );
+        }
+
+        const { type, orderId } = body;
+        let { paymentIntentId } = body;
+
+        if ((!paymentIntentId && !orderId) || !type) {
+            throw AppError.badRequest(
+                "INVALID_PAYLOAD",
+                "Either paymentIntentId or orderId is required, plus type",
+            );
+        }
+
+        // ── Synthetic paymentIntentId for orderId-based calls ──────
+        // When the client sends an orderId (k6 load test), look up the
+        // order's payment and assign a fake providerPaymentId. This lets
+        // the downstream markPaidByPaymentIntent handler find the payment
+        // without a real Stripe PaymentIntent ever being created.
+        if (orderId && !paymentIntentId) {
+            const payment = await prisma.payment.findFirst({
+                where: { orderId },
+                orderBy: { createdAt: "asc" },
+                select: { id: true, providerPaymentId: true },
+            });
+
+            if (!payment) {
+                throw AppError.notFound(
+                    "NOT_FOUND",
+                    "No payment record found for this order",
+                );
+            }
+
+            if (payment.providerPaymentId) {
+                // Already has a real or previously-assigned ID — reuse it.
+                paymentIntentId = payment.providerPaymentId;
+            } else {
+                paymentIntentId = `pi_k6test_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+                await prisma.payment.update({
+                    where: { id: payment.id },
+                    data: { providerPaymentId: paymentIntentId },
+                });
+            }
+        }
+
+        // Supported event types for test webhooks.
+        const supportedTypes = [
+            "payment_intent.succeeded",
+            "payment_intent.payment_failed",
+        ];
+        if (!supportedTypes.includes(type)) {
+            throw AppError.badRequest(
+                "UNSUPPORTED_TYPE",
+                `Test webhook type must be one of: ${supportedTypes.join(", ")}`,
+            );
+        }
+
+        // Build a minimal fake Stripe Event. The downstream handlers only
+        // read `event.type` and `event.data.object.id`, so we only need
+        // those fields to be valid.
+        const syntheticEventId = `evt_test_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+        const fakeEvent = {
+            id: syntheticEventId,
+            type,
+            data: {
+                object: { id: paymentIntentId },
+            },
+        } as unknown as Stripe.Event;
+
+        // Store in webhookEvent for idempotency (synthetic event IDs include
+        // a random suffix so repeated k6 runs don't collide on the same ID).
+        let webhookEventId: string;
+        try {
+            const row = await prisma.webhookEvent.create({
+                data: {
+                    provider: "stripe",
+                    eventId: syntheticEventId,
+                    type,
+                    payload: fakeEvent as unknown as Prisma.InputJsonValue,
+                },
+                select: { id: true },
+            });
+            webhookEventId = row.id;
+        } catch (err) {
+            if (
+                err instanceof Prisma.PrismaClientKnownRequestError &&
+                err.code === "P2002"
+            ) {
+                return { duplicate: true as const };
+            }
+            throw err;
+        }
+
+        // ── Dispatch through the standard pipeline ────────────────
+        try {
+            switch (type) {
+                case "payment_intent.succeeded": {
+                    const intent = fakeEvent.data.object as Stripe.PaymentIntent;
+                    const order = await ordersPaymentService.markPaidByPaymentIntent(intent.id);
+                    if (!order) {
+                        logger.warn(
+                            `[stripe:test] payment_intent.succeeded for unknown intent ${intent.id}`,
+                        );
+                    }
+                    break;
+                }
+                case "payment_intent.payment_failed": {
+                    const intent = fakeEvent.data.object as Stripe.PaymentIntent;
+                    const order = await ordersPaymentService.markFailedByPaymentIntent(
+                        intent.id,
+                    );
+                    if (!order) {
+                        logger.warn(
+                            `[stripe:test] payment_intent.payment_failed for unknown intent ${intent.id}`,
+                        );
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+        } catch (err) {
+            const errorMessage =
+                err instanceof Error ? err.message : String(err);
+            const newAttempts = 1;
+
+            logger.error(
+                `[stripe:test] webhook processing failed eventId=${syntheticEventId} type=${type} err=${errorMessage} — enqueuing retry`,
+            );
+
+            const delay = backoffDelay(newAttempts);
+
+            await prisma.webhookEvent.update({
+                where: { id: webhookEventId },
+                data: {
+                    attempts: newAttempts,
+                    lastError: errorMessage,
+                    nextAttemptAt: new Date(Date.now() + delay),
+                },
+            });
+
+            try {
+                await webhooksRetryQueue.add(
+                    "webhook.retry",
+                    { webhookEventId },
+                    { delay },
+                );
+            } catch (queueErr) {
+                logger.error(
+                    `[stripe:test] failed to enqueue retry for eventId=${syntheticEventId}: ${(queueErr as Error).message}`,
+                );
+            }
+
+            return { duplicate: false as const };
+        }
+
+        await prisma.webhookEvent.update({
+            where: { id: webhookEventId },
+            data: { processedAt: new Date() },
+        });
+
+        return { duplicate: false as const };
+    },
+
     async createPaymentIntent(
         orderId: string,
         userId: string,

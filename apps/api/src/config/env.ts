@@ -73,4 +73,9 @@ export const env = {
     REDIS_URL,
 
     DISABLE_RATE_LIMITING: process.env.DISABLE_RATE_LIMITING === "true",
+
+    // Test-only: bypass Stripe webhook signature verification so k6 can
+    // simulate webhook events by POSTing JSON directly. Must NEVER be
+    // enabled in production.
+    STRIPE_WEBHOOK_BYPASS: process.env.STRIPE_WEBHOOK_BYPASS === "true",
 };

@@ -1,13 +1,20 @@
 /**
- * k6 load test — Full checkout flow (signup → order).
+ * k6 load test — Full checkout flow (signin → order) using pre-seeded users.
+ *
+ * BEFORE RUNNING: Seed users into the database:
+ *   npm run seed:k6          # default 2000 users
+ *   npx tsx scripts/seed-k6-users.ts 5000   # custom count
  *
  * Flow per virtual user:
- *   1. Signup (unique email) → get auth cookie
+ *   1. Sign in as a pre-seeded user (k6-seed-{index}@test.com / k6test123)
  *   2. Browse products → pick a random one
  *   3. Add to cart
  *   4. Create shipping address
  *   5. Create order (the concurrency/consistency gate)
- *   6. (optional) Create PaymentIntent if STRIPE_SECRET_KEY is set
+ *   6. Simulate payment_intent.succeeded webhook via /payments/webhook/test
+ *      using a synthetic payment ID (zero Stripe API calls). Tests the full
+ *      payment processing pipeline under max load without Stripe rate limits.
+ *      Requires STRIPE_WEBHOOK_BYPASS=true on the API server.
  *
  * Usage:
  *   # Smoke (10 VUs, quick sanity check)
@@ -19,8 +26,11 @@
  *   # Stress (200 concurrent)
  *   k6 run k6/checkout.js -e VUS=200 -e DURATION=5m
  *
- *   # Custom
- *   k6 run k6/checkout.js -e VUS=100 -e DURATION=3m -e API_BASE_URL=http://localhost:5000 -e SKIP_PAYMENT=true
+ *   # Custom (real Stripe for comparison)
+ *   k6 run k6/checkout.js -e VUS=100 -e DURATION=3m -e API_BASE_URL=http://localhost:5000 -e USE_REAL_STRIPE=true
+ *
+ *   # Override seed user count (must match what was seeded)
+ *   k6 run k6/checkout.js -e SEED_USER_COUNT=5000
  *
  * Output:
  *   Console summary + JSON via --out json=k6/results/checkout-<ts>.json
@@ -35,7 +45,9 @@ import { Trend, Counter, Rate } from "k6/metrics";
 const API_BASE = __ENV.API_BASE_URL || "http://localhost:5000";
 const TARGET_VUS = Number(__ENV.VUS) || 10;
 const HOLD_DURATION = __ENV.DURATION || "2m";
-const SKIP_PAYMENT = __ENV.SKIP_PAYMENT === "true";
+const USE_REAL_STRIPE = __ENV.USE_REAL_STRIPE === "true";
+const SEED_USER_COUNT = Number(__ENV.SEED_USER_COUNT) || 2000;
+const SEED_PASSWORD = "k6test123";
 
 // ─── Custom metrics ─────────────────────────────────────────────────────
 
@@ -45,6 +57,8 @@ const cartAddDuration = new Trend("cart_add_duration_ms", true);
 const addressDuration = new Trend("address_duration_ms", true);
 const orderDuration = new Trend("order_duration_ms", true);
 const paymentIntentDuration = new Trend("payment_intent_duration_ms", true);
+const webhookDuration = new Trend("webhook_duration_ms", true);
+const webhookSuccessRate = new Rate("webhook_success_rate");
 const fullCheckoutDuration = new Trend("full_checkout_duration_ms", true);
 
 const ordersCreated = new Counter("orders_created");
@@ -103,40 +117,25 @@ function publicHeaders() {
 }
 
 /**
- * Sign up a new user. Each VU creates a unique user to avoid rate-limit
- * collisions (20 orders / 15 min per user).
+ * Sign in as a pre-seeded user. Each (vuId, iterId) pair maps to a unique
+ * user from the seeded pool via round-robin to minimise cart collisions.
  */
-function signup(vuId, iterId) {
+function signin(vuId, iterId) {
   const start = Date.now();
-  const email = `k6-checkout-${vuId}-${iterId}-${Date.now()}@test.com`;
+  const idx = (vuId * 10000 + iterId) % SEED_USER_COUNT;
+  const email = `k6-seed-${idx}@test.com`;
   const res = http.post(
-    `${API_BASE}/auth/signup`,
-    JSON.stringify({
-      email,
-      password: "k6test123",
-      name: `K6 User ${vuId}`,
-    }),
+    `${API_BASE}/auth/signin`,
+    JSON.stringify({ email, password: SEED_PASSWORD }),
     {
       headers: {
         "Content-Type": "application/json",
-        "X-Requested-With": "fetch", // CSRF middleware requires this on all POST
+        "X-Requested-With": "fetch",
       },
     },
   );
-  signupDuration.add(Date.now() - start);
-  return { res, email };
-}
-
-/** Sign in with existing seeded user (alternative to signup if needed). */
-function signin(email, password) {
-  const start = Date.now();
-  const res = http.post(
-    `${API_BASE}/auth/signin`,
-    JSON.stringify({ email, password }),
-    { headers: publicHeaders() },
-  );
   signupDuration.add(Date.now() - start); // reuse metric
-  return res;
+  return { res, email };
 }
 
 /** Fetch products. Use max limit=50 to spread VUs across as many products as possible. */
@@ -239,16 +238,16 @@ export default function () {
   const checkoutStart = Date.now();
   const idemKey = `k6-checkout-${vuId}-${iterId}-${Date.now()}`;
 
-  // ── 1. Signup ──────────────────────────────────────────────────
+  // ── 1. Sign in ─────────────────────────────────────────────────
 
-  const signupRes = signup(vuId, iterId);
-  const signupOk = check(signupRes.res, { "signup 201": (r) => r.status === 201 });
-  if (!signupOk) {
+  const signinRes = signin(vuId, iterId);
+  const signinOk = check(signinRes.res, { "signin 200": (r) => r.status === 200 });
+  if (!signinOk) {
     checkoutFailed.add(true);
     return;
   }
 
-  const token = extractCookie(signupRes.res, "ecomm_auth");
+  const token = extractCookie(signinRes.res, "ecomm_auth");
   if (!token) {
     checkoutFailed.add(true);
     return;
@@ -320,15 +319,96 @@ export default function () {
   const order = orderRes.json("order");
   const orderId = order?.id;
 
-  // ── 6. Payment intent (optional) ───────────────────────────────
+  // ── 6. Simulated payment webhook ─────────────────────────────────
+  //
+  // By default, bypasses Stripe entirely: sends the orderId to
+  // /payments/webhook/test and the API auto-assigns a synthetic
+  // providerPaymentId. This exercises the full payment processing
+  // pipeline (order PENDING→PAID, inventory, outbox, queue events)
+  // without touching the Stripe API — no rate limits, max throughput.
+  //
+  // Set USE_REAL_STRIPE=true to go through the real Stripe PaymentIntent
+  // flow instead (requires STRIPE_SECRET_KEY configured on the API).
+  //
+  // Both paths require STRIPE_WEBHOOK_BYPASS=true on the API server.
 
-  if (orderId && !SKIP_PAYMENT) {
-    group("6. payment intent", () => {
+  if (orderId) {
+    if (USE_REAL_STRIPE) {
+      // ── Real Stripe path ────────────────────────────────────────
       const piRes = createPaymentIntent(token, orderId, idemKey);
-      check(piRes, {
-        "payment intent ok": (r) => r.status === 201 || r.status === 500,
+      const piOk = check(piRes, {
+        "payment intent 201": (r) => r.status === 201,
       });
-    });
+
+      if (piOk) {
+        const piData = piRes.json();
+        const clientSecret = piData?.clientSecret;
+
+        if (clientSecret) {
+          const piMatch = clientSecret.match(/^(pi_[^_]+)_secret_/);
+          if (piMatch) {
+            const paymentIntentId = piMatch[1];
+
+            group("6a. simulated webhook (real Stripe)", () => {
+              const whStart = Date.now();
+              const whRes = http.post(
+                `${API_BASE}/payments/webhook/test`,
+                JSON.stringify({
+                  paymentIntentId,
+                  type: "payment_intent.succeeded",
+                }),
+                { headers: { "Content-Type": "application/json" } },
+              );
+              webhookDuration.add(Date.now() - whStart);
+
+              const whOk = check(whRes, {
+                "webhook 200": (r) => r.status === 200,
+                "webhook received": (r) =>
+                  r.json("received") === true,
+              });
+              webhookSuccessRate.add(whOk);
+
+              if (!whOk && whRes.status === 500) {
+                console.warn(
+                  `VU ${vuId}: Webhook test endpoint rejected (STRIPE_WEBHOOK_BYPASS?)`,
+                );
+              }
+            });
+          }
+        }
+      } else if (piRes.status === 500) {
+        console.warn(
+          `VU ${vuId}: PaymentIntent creation failed (Stripe not configured?)`,
+        );
+      }
+    } else {
+      // ── Zero-Stripe path (default) ──────────────────────────────
+      group("6. simulated webhook (fake payment)", () => {
+        const whStart = Date.now();
+        const whRes = http.post(
+          `${API_BASE}/payments/webhook/test`,
+          JSON.stringify({
+            orderId,
+            type: "payment_intent.succeeded",
+          }),
+          { headers: { "Content-Type": "application/json" } },
+        );
+        webhookDuration.add(Date.now() - whStart);
+
+        const whOk = check(whRes, {
+          "webhook 200": (r) => r.status === 200,
+          "webhook received": (r) =>
+            r.json("received") === true,
+        });
+        webhookSuccessRate.add(whOk);
+
+        if (!whOk && whRes.status === 500) {
+          console.warn(
+            `VU ${vuId}: Webhook test endpoint rejected (STRIPE_WEBHOOK_BYPASS?)`,
+          );
+        }
+      });
+    }
   }
 
   // ── Done ───────────────────────────────────────────────────────
@@ -375,12 +455,14 @@ export function handleSummary(data) {
     ["Avg RPS", String(rps)],
     ["HTTP failure rate", `${(httpFailed * 100).toFixed(1)}%`],
     ["", ""],
-    ["Signup p50 / p95 / p99 (ms)", `${Math.round(p50("signup_duration_ms"))} / ${Math.round(p95("signup_duration_ms"))} / ${Math.round(p99("signup_duration_ms"))}`],
+    ["Signin p50 / p95 / p99 (ms)", `${Math.round(p50("signup_duration_ms"))} / ${Math.round(p95("signup_duration_ms"))} / ${Math.round(p99("signup_duration_ms"))}`],
     ["Product list p50 / p95 / p99 (ms)", `${Math.round(p50("product_list_duration_ms"))} / ${Math.round(p95("product_list_duration_ms"))} / ${Math.round(p99("product_list_duration_ms"))}`],
     ["Cart add p50 / p95 / p99 (ms)", `${Math.round(p50("cart_add_duration_ms"))} / ${Math.round(p95("cart_add_duration_ms"))} / ${Math.round(p99("cart_add_duration_ms"))}`],
     ["Address create p50 / p95 / p99 (ms)", `${Math.round(p50("address_duration_ms"))} / ${Math.round(p95("address_duration_ms"))} / ${Math.round(p99("address_duration_ms"))}`],
     ["Order create p50 / p95 / p99 (ms)", `${Math.round(p50("order_duration_ms"))} / ${Math.round(p95("order_duration_ms"))} / ${Math.round(p99("order_duration_ms"))}`],
     ["Payment intent p50 / p95 / p99 (ms)", `${Math.round(p50("payment_intent_duration_ms"))} / ${Math.round(p95("payment_intent_duration_ms"))} / ${Math.round(p99("payment_intent_duration_ms"))}`],
+    ["Webhook p50 / p95 / p99 (ms)", `${Math.round(p50("webhook_duration_ms"))} / ${Math.round(p95("webhook_duration_ms"))} / ${Math.round(p99("webhook_duration_ms"))}`],
+    ["Webhook success rate", `${(getVal("webhook_success_rate", "rate") * 100).toFixed(1)}%`],
     ["Full checkout p50 / p95 / p99 (ms)", `${Math.round(p50("full_checkout_duration_ms"))} / ${Math.round(p95("full_checkout_duration_ms"))} / ${Math.round(p99("full_checkout_duration_ms"))}`],
     ["", ""],
     ["HTTP req p50 / p95 / p99 (ms)", `${Math.round(getVal("http_req_duration", "med"))} / ${Math.round(getVal("http_req_duration", "p(95)"))} / ${Math.round(getVal("http_req_duration", "p(99)"))}`],
@@ -425,32 +507,35 @@ export function handleSummary(data) {
         avgRps: Number(rps),
         httpFailureRate: httpFailed,
         p50: {
-          signup: Math.round(p50("signup_duration_ms")),
+          signin: Math.round(p50("signup_duration_ms")),
           productList: Math.round(p50("product_list_duration_ms")),
           cartAdd: Math.round(p50("cart_add_duration_ms")),
           addressCreate: Math.round(p50("address_duration_ms")),
           orderCreate: Math.round(p50("order_duration_ms")),
           paymentIntent: Math.round(p50("payment_intent_duration_ms")),
+          webhook: Math.round(p50("webhook_duration_ms")),
           fullCheckout: Math.round(p50("full_checkout_duration_ms")),
           httpReq: Math.round(getVal("http_req_duration", "med")),
         },
         p95: {
-          signup: Math.round(p95("signup_duration_ms")),
+          signin: Math.round(p95("signup_duration_ms")),
           productList: Math.round(p95("product_list_duration_ms")),
           cartAdd: Math.round(p95("cart_add_duration_ms")),
           addressCreate: Math.round(p95("address_duration_ms")),
           orderCreate: Math.round(p95("order_duration_ms")),
           paymentIntent: Math.round(p95("payment_intent_duration_ms")),
+          webhook: Math.round(p95("webhook_duration_ms")),
           fullCheckout: Math.round(p95("full_checkout_duration_ms")),
           httpReq: Math.round(getVal("http_req_duration", "p(95)")),
         },
         p99: {
-          signup: Math.round(p99("signup_duration_ms")),
+          signin: Math.round(p99("signup_duration_ms")),
           productList: Math.round(p99("product_list_duration_ms")),
           cartAdd: Math.round(p99("cart_add_duration_ms")),
           addressCreate: Math.round(p99("address_duration_ms")),
           orderCreate: Math.round(p99("order_duration_ms")),
           paymentIntent: Math.round(p99("payment_intent_duration_ms")),
+          webhook: Math.round(p99("webhook_duration_ms")),
           fullCheckout: Math.round(p99("full_checkout_duration_ms")),
           httpReq: Math.round(getVal("http_req_duration", "p(99)")),
         },
