@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, X } from "lucide-react";
-import { formatMoney, type CartSummaryDTO } from "@repo/shared";
+import { type CartSummaryDTO } from "@repo/shared";
 import { usePromoCode } from "@/hooks/usePromoCode";
+import OrderSummaryBreakdown from "@/components/OrderSummaryBreakdown";
 
 type Props = {
     initialSummary: CartSummaryDTO;
@@ -37,70 +38,18 @@ export default function CartSummary({ initialSummary, totalQty }: Props) {
     return (
         <aside className="h-fit rounded-md border border-slate-700 bg-slate-800 p-5">
             <h2 className="text-lg font-semibold text-white">Order summary</h2>
-            <dl className="mt-4 space-y-2 text-sm">
-                <div className="flex justify-between text-slate-300">
-                    <dt>
-                        Subtotal ({totalQty} item{totalQty === 1 ? "" : "s"})
-                    </dt>
-                    <dd>
-                        {formatMoney(summary.subtotalMinor, summary.currency)}
-                    </dd>
-                </div>
-
-                {BigInt(summary.discountMinor) > 0n && (
-                    <div className="flex justify-between text-emerald-400">
-                        <dt>
-                            Discount
-                            {summary.discountNote && (
-                                <span className="ml-1 text-xs text-emerald-500">
-                                    ({summary.discountNote})
-                                </span>
-                            )}
-                        </dt>
-                        <dd>
-                            -{formatMoney(summary.discountMinor, summary.currency)}
-                        </dd>
-                    </div>
-                )}
-
-                <div className="flex justify-between text-slate-300">
-                    <dt>
-                        Shipping
-                        {summary.shippingNote && (
-                            <span className="ml-2 text-xs text-slate-500">
-                                ({summary.shippingNote})
-                            </span>
-                        )}
-                    </dt>
-                    <dd>
-                        {BigInt(summary.shippingMinor) === 0n
-                            ? "Free"
-                            : formatMoney(summary.shippingMinor, summary.currency)}
-                    </dd>
-                </div>
-                <div className="flex justify-between text-slate-300">
-                    <dt>
-                        Tax
-                        {summary.taxNote && (
-                            <span className="ml-2 text-xs text-slate-500">
-                                ({summary.taxNote})
-                            </span>
-                        )}
-                    </dt>
-                    <dd>
-                        {BigInt(summary.taxMinor) === 0n
-                            ? "—"
-                            : formatMoney(summary.taxMinor, summary.currency)}
-                    </dd>
-                </div>
-                <div className="my-3 h-px bg-slate-700" />
-                <div className="flex justify-between text-base font-semibold text-white">
-                    <dt>Total</dt>
-                    <dd>
-                        {formatMoney(summary.totalMinor, summary.currency)}
-                    </dd>
-                </div>
-            </dl>
+            <OrderSummaryBreakdown
+                subtotalMinor={summary.subtotalMinor}
+                discountMinor={summary.discountMinor}
+                shippingMinor={summary.shippingMinor}
+                taxMinor={summary.taxMinor}
+                totalMinor={summary.totalMinor}
+                currency={summary.currency}
+                subtotalLabel={`Subtotal (${totalQty} item${totalQty === 1 ? "" : "s"})`}
+                discountNote={summary.discountNote}
+                shippingNote={summary.shippingNote}
+                taxNote={summary.taxNote}
+            />
 
             {/* Promo code input */}
             <div className="mt-5 space-y-2">

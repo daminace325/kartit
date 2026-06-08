@@ -10,6 +10,7 @@ import { PayForm } from "@/components/payment/PayForm";
 import { useIdempotencyKey } from "@/hooks/useIdempotencyKey";
 import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 import { usePromoCode } from "@/hooks/usePromoCode";
+import OrderSummaryBreakdown from "@/components/OrderSummaryBreakdown";
 
 type Row = {
     productId: string;
@@ -94,9 +95,6 @@ export default function CheckoutClient(props: Props) {
     const handleStartPayment = () => {
         startPayment(getBaseKey(), selectedAddressId, promoCode || undefined);
     };
-
-    const displayDiscount = localDiscountMinor;
-    const hasDiscount = BigInt(displayDiscount) > 0n;
 
     return (
         <div className="mt-8 grid gap-8 lg:grid-cols-[2fr_1fr]">
@@ -311,60 +309,17 @@ export default function CheckoutClient(props: Props) {
             <aside className="lg:sticky lg:top-24 lg:self-start">
                 <div className="rounded-md border border-slate-700 bg-slate-800 p-6">
                     <h2 className="text-lg font-semibold text-white">Summary</h2>
-                    <dl className="mt-4 space-y-2 text-sm">
-                        <div className="flex justify-between text-slate-300">
-                            <dt>Subtotal</dt>
-                            <dd>{formatMoney(subtotalMinor, currency)}</dd>
-                        </div>
-                        {hasDiscount && (
-                            <div className="flex justify-between text-emerald-400">
-                                <dt>
-                                    Discount
-                                    {localDiscountNote && (
-                                        <span className="ml-1 text-xs text-emerald-500">
-                                            ({localDiscountNote})
-                                        </span>
-                                    )}
-                                </dt>
-                                <dd>
-                                    -{formatMoney(displayDiscount, currency)}
-                                </dd>
-                            </div>
-                        )}
-                        <div className="flex justify-between text-slate-300">
-                            <dt>
-                                Shipping
-                                {shippingNote && (
-                                    <span className="ml-2 text-xs text-slate-500">
-                                        {shippingNote}
-                                    </span>
-                                )}
-                            </dt>
-                            <dd>
-                                {BigInt(localShippingMinor) === 0n
-                                    ? "Free"
-                                    : formatMoney(localShippingMinor, currency)}
-                            </dd>
-                        </div>
-                        <div className="flex justify-between text-slate-300">
-                            <dt>
-                                Tax
-                                {taxNote && (
-                                    <span className="ml-2 text-xs text-slate-500">{taxNote}</span>
-                                )}
-                            </dt>
-                            <dd>
-                                {BigInt(localTaxMinor) === 0n
-                                    ? "—"
-                                    : formatMoney(localTaxMinor, currency)}
-                            </dd>
-                        </div>
-                        <div className="my-3 h-px bg-slate-700" />
-                        <div className="flex justify-between text-base font-semibold text-white">
-                            <dt>Total</dt>
-                            <dd>{formatMoney(localTotalMinor, currency)}</dd>
-                        </div>
-                    </dl>
+                    <OrderSummaryBreakdown
+                        subtotalMinor={subtotalMinor}
+                        discountMinor={localDiscountMinor}
+                        shippingMinor={localShippingMinor}
+                        taxMinor={localTaxMinor}
+                        totalMinor={localTotalMinor}
+                        currency={currency}
+                        discountNote={localDiscountNote}
+                        shippingNote={shippingNote}
+                        taxNote={taxNote}
+                    />
                 </div>
             </aside>
         </div>

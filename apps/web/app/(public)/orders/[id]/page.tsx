@@ -11,6 +11,7 @@ import {
     ORDER_TIMELINE,
 } from "@/constants/order-status";
 import CancelOrderButton from "@/components/CancelOrderButton";
+import OrderSummaryBreakdown from "@/components/OrderSummaryBreakdown";
 import RequestRefundButton from "@/components/RequestRefundButton";
 import { formatDateTime } from "@/lib/dates";
 
@@ -291,67 +292,15 @@ export default async function OrderDetailPage({
                         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
                             Summary
                         </h2>
-                        <dl className="mt-4 space-y-2 text-sm">
-                            <div className="flex justify-between text-slate-300">
-                                <dt>Subtotal</dt>
-                                <dd>
-                                    {formatMoney(
-                                        BigInt(order.subtotalMinor),
-                                        order.currency,
-                                    )}
-                                </dd>
-                            </div>
-                            {BigInt(order.discountMinor) > 0n && (
-                                <div className="flex justify-between text-emerald-400">
-                                    <dt>
-                                        Discount
-                                        {order.promotionCode && (
-                                            <span className="ml-1 text-xs text-emerald-500">
-                                                ({order.promotionCode})
-                                            </span>
-                                        )}
-                                    </dt>
-                                    <dd>
-                                        -{formatMoney(
-                                            BigInt(order.discountMinor),
-                                            order.currency,
-                                        )}
-                                    </dd>
-                                </div>
-                            )}
-                            <div className="flex justify-between text-slate-300">
-                                <dt>Shipping</dt>
-                                <dd>
-                                    {BigInt(order.shippingMinor) === 0n
-                                        ? "Free"
-                                        : formatMoney(
-                                            BigInt(order.shippingMinor),
-                                            order.currency,
-                                        )}
-                                </dd>
-                            </div>
-                            <div className="flex justify-between text-slate-300">
-                                <dt>Tax</dt>
-                                <dd>
-                                    {BigInt(order.taxMinor) === 0n
-                                        ? "—"
-                                        : formatMoney(
-                                            BigInt(order.taxMinor),
-                                            order.currency,
-                                        )}
-                                </dd>
-                            </div>
-                            <div className="my-3 h-px bg-slate-700" />
-                            <div className="flex justify-between text-base font-semibold text-white">
-                                <dt>Total</dt>
-                                <dd>
-                                    {formatMoney(
-                                        BigInt(order.totalMinor),
-                                        order.currency,
-                                    )}
-                                </dd>
-                            </div>
-                        </dl>
+                        <OrderSummaryBreakdown
+                            subtotalMinor={order.subtotalMinor}
+                            discountMinor={order.discountMinor}
+                            shippingMinor={order.shippingMinor}
+                            taxMinor={order.taxMinor}
+                            totalMinor={order.totalMinor}
+                            currency={order.currency}
+                            discountNote={order.promotionCode ?? undefined}
+                        />
                     </div>
                 </aside>
             </div>
