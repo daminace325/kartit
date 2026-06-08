@@ -1,6 +1,9 @@
 // Mirror of Prisma enums as plain string unions so the web app
 // doesn't need to import the Prisma client.
 
+/** Number of days after delivery that a customer can request a refund. */
+export const REFUND_WINDOW_DAYS = 7;
+
 export const UserRole = {
     CUSTOMER: "CUSTOMER",
     ADMIN: "ADMIN",

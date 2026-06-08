@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Check, Circle, PackageCheck } from "lucide-react";
 import { api, ApiClientError } from "@/services/apiClient";
 import { authRequired } from "@/lib/auth";
-import { type OrderDTO } from "@repo/shared";
+import { type OrderDTO, REFUND_WINDOW_DAYS } from "@repo/shared";
 import {
     ORDER_CANCELLABLE,
     ORDER_STATUS_LABELS,
@@ -27,8 +27,6 @@ type RefundRequestDTO = {
     reviewedBy: string | null;
     reviewedAt: string | null;
 };
-
-const REFUND_WINDOW_DAYS = 7;
 
 export default async function OrderDetailPage({
     params,

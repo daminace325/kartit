@@ -1,8 +1,6 @@
 import { prisma } from "@repo/db";
-import { OrderStatus } from "@repo/shared";
+import { OrderStatus, REFUND_WINDOW_DAYS } from "@repo/shared";
 import { AppError } from "../../lib/errors";
-
-const REFUND_WINDOW_DAYS = 7;
 
 export interface RefundRequestDTO {
     id: string;
