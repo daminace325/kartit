@@ -12,6 +12,7 @@ import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 import { usePromoCode } from "@/hooks/usePromoCode";
 import OrderSummaryBreakdown from "@/components/OrderSummaryBreakdown";
 import OrderItemRow from "@/components/OrderItemRow";
+import AddressDisplay from "@/components/AddressDisplay";
 
 type Row = {
     productId: string;
@@ -155,26 +156,7 @@ export default function CheckoutClient(props: Props) {
                                                 }}
                                                 className="sr-only"
                                             />
-                                            <span className="block font-medium text-white">
-                                                {addr.name}
-                                            </span>
-                                            <span className="mt-1 block text-slate-400">
-                                                {addr.phone}
-                                            </span>
-                                            <span className="mt-3 block text-slate-300">
-                                                {addr.line1}
-                                                {addr.line2 ? `, ${addr.line2}` : ""}
-                                            </span>
-                                            <span className="block text-slate-400">
-                                                {addr.city}
-                                                {addr.state ? `, ${addr.state}` : ""}{" "}
-                                                {addr.postalCode}
-                                            </span>
-                                            {addr.country && (
-                                                <span className="block text-slate-400">
-                                                    {addr.country}
-                                                </span>
-                                            )}
+                                            <AddressDisplay address={addr} />
                                         </label>
                                     );
                                 })}

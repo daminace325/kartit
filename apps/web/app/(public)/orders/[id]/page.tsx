@@ -13,6 +13,7 @@ import {
 import CancelOrderButton from "@/components/CancelOrderButton";
 import OrderSummaryBreakdown from "@/components/OrderSummaryBreakdown";
 import OrderItemRow from "@/components/OrderItemRow";
+import AddressDisplay from "@/components/AddressDisplay";
 import RequestRefundButton from "@/components/RequestRefundButton";
 import { formatDateTime } from "@/lib/dates";
 
@@ -250,18 +251,19 @@ export default async function OrderDetailPage({
                         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
                             Shipping address
                         </h2>
-                        <div className="mt-4 text-sm text-slate-300">
-                            <p className="font-medium text-white">{order.shippingName}</p>
-                            <p className="text-slate-400">{order.shippingPhone}</p>
-                            <p className="mt-3">{order.shippingLine1}</p>
-                            {order.shippingLine2 && <p>{order.shippingLine2}</p>}
-                            <p>
-                                {order.shippingCity}
-                                {order.shippingState ? `, ${order.shippingState}` : ""}{" "}
-                                {order.shippingPostalCode}
-                            </p>
-                            <p>{order.shippingCountry}</p>
-                        </div>
+                        <AddressDisplay
+                            className="mt-4"
+                            address={{
+                                name: order.shippingName,
+                                phone: order.shippingPhone,
+                                line1: order.shippingLine1,
+                                line2: order.shippingLine2,
+                                city: order.shippingCity,
+                                state: order.shippingState,
+                                postalCode: order.shippingPostalCode,
+                                country: order.shippingCountry,
+                            }}
+                        />
                     </div>
 
                     <div className="rounded-md border border-slate-700 bg-slate-800 p-6">
