@@ -4,13 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { Loader2, X } from "lucide-react";
 import { Elements } from "@stripe/react-stripe-js";
-import { formatMoney, type AddressDTO } from "@repo/shared";
+import { type AddressDTO } from "@repo/shared";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { PayForm } from "@/components/payment/PayForm";
 import { useIdempotencyKey } from "@/hooks/useIdempotencyKey";
 import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 import { usePromoCode } from "@/hooks/usePromoCode";
 import OrderSummaryBreakdown from "@/components/OrderSummaryBreakdown";
+import OrderItemRow from "@/components/OrderItemRow";
 
 type Row = {
     productId: string;
@@ -103,32 +104,15 @@ export default function CheckoutClient(props: Props) {
                     <h2 className="text-lg font-semibold text-white">Order items</h2>
                     <div className="mt-4 divide-y divide-slate-700 rounded-md border border-slate-700 bg-slate-800">
                         {rows.map((row) => (
-                            <div key={row.productId} className="flex gap-4 p-4">
-                                <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-slate-900">
-                                    {row.imageUrl ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                            src={row.imageUrl}
-                                            alt={row.productName}
-                                            className="h-full w-full object-cover"
-                                        />
-                                    ) : null}
-                                </div>
-                                <div className="flex flex-1 items-center justify-between gap-4">
-                                    <div className="min-w-0">
-                                        <div className="truncate text-sm font-medium text-white">
-                                            {row.productName}
-                                        </div>
-                                        <div className="text-xs text-slate-400">
-                                            Qty {row.quantity} ·{" "}
-                                            {formatMoney(row.unitPriceMinor, currency)} each
-                                        </div>
-                                    </div>
-                                    <div className="text-sm font-medium text-white">
-                                        {formatMoney(row.lineTotalMinor, currency)}
-                                    </div>
-                                </div>
-                            </div>
+                            <OrderItemRow
+                                key={row.productId}
+                                productName={row.productName}
+                                imageUrl={row.imageUrl}
+                                quantity={row.quantity}
+                                unitPriceMinor={row.unitPriceMinor}
+                                lineTotalMinor={row.lineTotalMinor}
+                                currency={currency}
+                            />
                         ))}
                     </div>
                 </section>

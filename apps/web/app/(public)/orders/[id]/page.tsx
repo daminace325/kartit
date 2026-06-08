@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Check, Circle, PackageCheck } from "lucide-react";
 import { api, ApiClientError } from "@/services/apiClient";
 import { authRequired } from "@/lib/auth";
-import { formatMoney, type OrderDTO } from "@repo/shared";
+import { type OrderDTO } from "@repo/shared";
 import {
     ORDER_CANCELLABLE,
     ORDER_STATUS_LABELS,
@@ -12,6 +12,7 @@ import {
 } from "@/constants/order-status";
 import CancelOrderButton from "@/components/CancelOrderButton";
 import OrderSummaryBreakdown from "@/components/OrderSummaryBreakdown";
+import OrderItemRow from "@/components/OrderItemRow";
 import RequestRefundButton from "@/components/RequestRefundButton";
 import { formatDateTime } from "@/lib/dates";
 
@@ -230,41 +231,16 @@ export default async function OrderDetailPage({
                     <h2 className="text-lg font-semibold text-white">Items</h2>
                     <div className="mt-4 divide-y divide-slate-700 rounded-md border border-slate-700 bg-slate-800">
                         {order.items.map((item) => (
-                            <div key={item.id} className="flex gap-4 p-4">
-                                {item.imageUrl && (
-                                    <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-slate-700">
-                                        <img
-                                            src={item.imageUrl}
-                                            alt={item.productName}
-                                            className="h-full w-full object-cover"
-                                        />
-                                    </div>
-                                )}
-                                <div className="flex flex-1 items-center justify-between gap-4">
-                                    <div className="min-w-0">
-                                        <Link
-                                            href={`/p/${encodeURIComponent(item.productSlug)}`}
-                                            className="truncate text-sm font-medium text-white hover:text-sky-400"
-                                        >
-                                            {item.productName}
-                                        </Link>
-                                        <div className="text-xs text-slate-400">
-                                            Qty {item.quantity} ·{" "}
-                                            {formatMoney(
-                                                BigInt(item.unitPriceMinor),
-                                                item.currency,
-                                            )}{" "}
-                                            each
-                                        </div>
-                                    </div>
-                                    <div className="text-sm font-medium text-white">
-                                        {formatMoney(
-                                            BigInt(item.totalMinor),
-                                            item.currency,
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
+                            <OrderItemRow
+                                key={item.id}
+                                productName={item.productName}
+                                productSlug={item.productSlug}
+                                imageUrl={item.imageUrl}
+                                quantity={item.quantity}
+                                unitPriceMinor={item.unitPriceMinor}
+                                lineTotalMinor={item.totalMinor}
+                                currency={item.currency}
+                            />
                         ))}
                     </div>
                 </section>
