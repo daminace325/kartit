@@ -1,14 +1,7 @@
-import type { RequestHandler } from "express";
 import type { PromotionCreateInput, PromotionUpdateInput } from "@repo/shared";
 import { promotionsService } from "./promotions.service";
-import { AppError } from "../../lib/errors";
 import { asyncHandler } from "../../lib/asyncHandler";
-
-function userIdOrThrow(req: Parameters<RequestHandler>[0]): string {
-    const id = req.user?.id;
-    if (!id) throw AppError.unauthorized();
-    return id;
-}
+import { userIdOrThrow } from "../../lib/request";
 
 export const listPromotions = asyncHandler(async (req, res) => {
     const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;

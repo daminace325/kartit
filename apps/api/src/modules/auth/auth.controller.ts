@@ -1,14 +1,7 @@
-import type { RequestHandler } from "express";
 import { authService } from "./auth.service";
 import { setAuthCookie, clearAuthCookie } from "../../lib/cookies";
-import { AppError } from "../../lib/errors";
 import { asyncHandler } from "../../lib/asyncHandler";
-
-function userIdOrThrow(req: Parameters<RequestHandler>[0]): string {
-    const id = req.user?.id;
-    if (!id) throw AppError.unauthorized();
-    return id;
-}
+import { userIdOrThrow } from "../../lib/request";
 
 export const signup = asyncHandler(async (req, res) => {
     const { user, token } = await authService.signup(req.body);

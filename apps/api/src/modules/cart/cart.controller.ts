@@ -1,14 +1,7 @@
-import type { RequestHandler } from "express";
 import type { CartAddItemInput, CartUpdateItemInput } from "@repo/shared";
 import { cartService } from "./cart.service";
-import { AppError } from "../../lib/errors";
 import { asyncHandler } from "../../lib/asyncHandler";
-
-function userIdOrThrow(req: Parameters<RequestHandler>[0]): string {
-    const id = req.user?.id;
-    if (!id) throw AppError.unauthorized();
-    return id;
-}
+import { userIdOrThrow } from "../../lib/request";
 
 export const getCart = asyncHandler(async (req, res) => {
     const cart = await cartService.get(userIdOrThrow(req));

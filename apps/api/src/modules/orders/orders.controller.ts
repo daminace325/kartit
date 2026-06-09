@@ -1,4 +1,3 @@
-import type { RequestHandler } from "express";
 import {
     UserRole,
     type OrderCreateInput,
@@ -9,14 +8,8 @@ import { ordersService } from "./orders.service";
 import { ordersStatusService } from "./orders.status.service";
 import { ordersPaymentService } from "./orders.payment.service";
 import { refundRequestService } from "./orders.refund-request.service";
-import { AppError } from "../../lib/errors";
 import { asyncHandler } from "../../lib/asyncHandler";
-
-function userIdOrThrow(req: Parameters<RequestHandler>[0]): string {
-    const id = req.user?.id;
-    if (!id) throw AppError.unauthorized();
-    return id;
-}
+import { userIdOrThrow } from "../../lib/request";
 
 export const createOrder = asyncHandler(async (req, res) => {
     const userId = userIdOrThrow(req);

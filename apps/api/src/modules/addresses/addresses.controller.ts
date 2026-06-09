@@ -1,13 +1,6 @@
-import type { RequestHandler } from "express";
 import { addressesService } from "./addresses.service";
-import { AppError } from "../../lib/errors";
 import { asyncHandler } from "../../lib/asyncHandler";
-
-function userIdOrThrow(req: Parameters<RequestHandler>[0]): string {
-    const id = req.user?.id;
-    if (!id) throw AppError.unauthorized();
-    return id;
-}
+import { userIdOrThrow } from "../../lib/request";
 
 export const listAddresses = asyncHandler(async (req, res) => {
     const addresses = await addressesService.list(userIdOrThrow(req));
