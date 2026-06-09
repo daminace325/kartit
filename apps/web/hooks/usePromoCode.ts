@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { type CartSummaryDTO } from "@repo/shared";
 import { apiFetch, ApiClientError } from "@/services/apiClient";
 
@@ -21,7 +21,9 @@ export function usePromoCode(options?: UsePromoCodeOptions) {
 
 	// Ref so applyPromo stays referentially stable even when onSuccess changes.
 	const onSuccessRef = useRef(onSuccess);
-	onSuccessRef.current = onSuccess;
+	useEffect(() => {
+		onSuccessRef.current = onSuccess;
+	});
 
 	const applyPromo = useCallback(async (code: string) => {
 		const trimmed = code.trim();

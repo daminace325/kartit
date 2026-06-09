@@ -17,19 +17,14 @@ export const promotionCreateSchema = z.object({
     minSubtotalMinor: z.coerce.bigint().positive().optional(),
     maxUses: z.coerce.number().int().positive().optional(),
     maxUsesPerUser: z.coerce.number().int().positive().optional(),
-    startsAt: z.string().datetime().optional(),
-    endsAt: z.string().datetime().optional(),
+    startsAt: z.iso.datetime().optional(),
+    endsAt: z.iso.datetime().optional(),
     isActive: z.boolean().default(true),
 });
 export type PromotionCreateInput = z.infer<typeof promotionCreateSchema>;
 
 export const promotionUpdateSchema = promotionCreateSchema.partial().omit({ code: true });
 export type PromotionUpdateInput = z.infer<typeof promotionUpdateSchema>;
-
-const promotionValidateSchema = z.object({
-    code: z.string().min(1),
-});
-type PromotionValidateInput = z.infer<typeof promotionValidateSchema>;
 
 export type PromotionDTO = {
     id: string;
