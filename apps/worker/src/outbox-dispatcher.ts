@@ -142,26 +142,3 @@ export function startOutboxDispatcher(
         `[outbox-dispatcher] started (pollInterval=${pollIntervalMs}ms batchSize=${batchSize})`,
     );
 }
-
-/**
- * Creates an Outbox entry builder for use within Prisma transactions.
- *
- * Usage inside a $transaction callback:
- * ```ts
- * const outbox = buildOutboxEntry("Order", order.id, "OrderPaid", { total: order.totalMinor });
- * await tx.outbox.create({ data: outbox });
- * ```
- */
-export function buildOutboxEntry(
-    aggregateType: string,
-    aggregateId: string,
-    eventType: string,
-    payload: Record<string, unknown> = {},
-): {
-    aggregateType: string;
-    aggregateId: string;
-    eventType: string;
-    payload: Record<string, unknown>;
-} {
-    return { aggregateType, aggregateId, eventType, payload };
-}
