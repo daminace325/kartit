@@ -1,14 +1,13 @@
 ﻿import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { api } from "@/services/apiClient";
+import type { CategoryDTO } from "@repo/shared";
 import ProductForm from "../ProductForm";
 
 export const dynamic = "force-dynamic";
 
-type Category = { id: string; slug: string; name: string };
-
 export default async function NewProductPage() {
-    const { categories } = await api.get<{ categories: Category[] }>("/categories");
+    const { categories } = await api.get<{ categories: CategoryDTO[] }>("/categories");
 
     return (
         <div className="px-8 py-8">

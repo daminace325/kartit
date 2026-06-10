@@ -3,12 +3,10 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ChevronRight } from "lucide-react";
 import { api, ApiClientError } from "@/services/apiClient";
-import { formatMoney, type ProductDTO } from "@repo/shared";
+import { formatMoney, type CategoryDTO, type ProductDTO } from "@repo/shared";
 import { productImageUrl } from "@/lib/image";
 import ProductGallery from "@/components/ProductGallery";
 import AddToCart from "@/components/AddToCart";
-
-type Category = { id: string; slug: string; name: string };
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +63,7 @@ export default async function ProductDetailPage({
     }
 
     const category = await api
-        .get<{ category: Category }>(`/categories/${encodeURIComponent(product.categoryId)}`)
+        .get<{ category: CategoryDTO }>(`/categories/${encodeURIComponent(product.categoryId)}`)
         .then((r) => r.category)
         .catch(() => null);
 

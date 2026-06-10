@@ -1,15 +1,14 @@
 ﻿import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { api } from "@/services/apiClient";
+import type { CategoryDTO } from "@repo/shared";
 import CategoryForm from "../CategoryForm";
 
 export const dynamic = "force-dynamic";
 
-type Category = { id: string; slug: string; name: string; parentId: string | null };
-
 export default async function NewCategoryPage() {
     // Only top-level categories may be parents (2-level limit).
-    const { categories } = await api.get<{ categories: Category[] }>(
+    const { categories } = await api.get<{ categories: CategoryDTO[] }>(
         "/categories?parentId=null",
     );
 

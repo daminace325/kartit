@@ -23,3 +23,13 @@ export const categoryListQuerySchema = z.object({
     includeInactive: z.string().optional(),
 });
 export type CategoryListQuery = z.infer<typeof categoryListQuerySchema>;
+
+/** Canonical DTO returned by all category endpoints.
+ *  The API always returns all five fields regardless of query params. */
+export type CategoryDTO = {
+    id: string;
+    slug: string;
+    name: string;
+    parentId: string | null;
+    isActive: boolean;
+};

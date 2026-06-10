@@ -1,9 +1,7 @@
 ﻿import Link from "next/link";
 import { api } from "@/services/apiClient";
-import type { ProductDTO } from "@repo/shared";
+import type { CategoryDTO, ProductDTO } from "@repo/shared";
 import ProductCard from "@/components/ProductCard";
-
-type Category = { id: string; slug: string; name: string; parentId: string | null };
 type ProductList = { items: ProductDTO[]; nextCursor: string | null };
 
 export const dynamic = "force-dynamic";
@@ -14,8 +12,8 @@ const PRODUCTS_PER_CATEGORY = 8;
 export default async function HomePage() {
     // All categories so we can resolve each top-level category's children.
     const { categories: allCategories } = await api
-        .get<{ categories: Category[] }>("/categories")
-        .catch(() => ({ categories: [] as Category[] }));
+        .get<{ categories: CategoryDTO[] }>("/categories")
+        .catch(() => ({ categories: [] as CategoryDTO[] }));
 
     const childrenByParent = new Map<string, string[]>();
     for (const c of allCategories) {

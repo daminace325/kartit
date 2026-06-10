@@ -1,10 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { api, ApiClientError } from "@/services/apiClient";
-import type { ProductDTO } from "@repo/shared";
+import type { CategoryDTO, ProductDTO } from "@repo/shared";
 import ProductCard from "@/components/ProductCard";
-
-type Category = { id: string; slug: string; name: string; parentId: string | null };
 type ProductList = { items: ProductDTO[]; nextCursor: string | null };
 
 export const dynamic = "force-dynamic";
@@ -19,9 +17,9 @@ export default async function CategoryPage({
     const { slug } = await params;
     const sp = await searchParams;
 
-    let category: Category;
+    let category: CategoryDTO;
     try {
-        ({ category } = await api.get<{ category: Category }>(
+        ({ category } = await api.get<{ category: CategoryDTO }>(
             `/categories/slug/${encodeURIComponent(slug)}`,
         ));
     } catch (err) {
@@ -31,16 +29,16 @@ export default async function CategoryPage({
 
     // For a top-level category include its subcategories' products too.
     const { categories: children } = await api
-        .get<{ categories: Category[] }>(
+        .get<{ categories: CategoryDTO[] }>(
             `/categories?parentId=${encodeURIComponent(category.id)}`,
         )
-        .catch(() => ({ categories: [] as Category[] }));
+        .catch(() => ({ categories: [] as CategoryDTO[] }));
 
     const ids = [category.id, ...children.map((c) => c.id)];
 
     const parent = category.parentId
         ? await api
-              .get<{ category: Category }>(
+              .get<{ category: CategoryDTO }>(
                   `/categories/${encodeURIComponent(category.parentId)}`,
               )
               .then((r) => r.category)

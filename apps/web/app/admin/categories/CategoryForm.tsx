@@ -5,14 +5,13 @@ import { useState } from "react";
 import { slugify } from "@/lib/slugify";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { ErrorBanner } from "@/components/ErrorBanner";
-
-type Initial = { id: string; name: string; slug: string; parentId: string | null; isActive: boolean };
+import type { CategoryDTO } from "@repo/shared";
 
 type ParentOption = { id: string; name: string };
 
 type Props = {
     mode: "create" | "edit";
-    initial?: Initial;
+    initial?: CategoryDTO;
     parentOptions: ParentOption[];
 };
 

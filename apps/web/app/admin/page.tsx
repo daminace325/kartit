@@ -1,11 +1,10 @@
 ﻿import Link from "next/link";
 import { Package, FolderTree, ShoppingBag, Tag } from "lucide-react";
 import { api } from "@/services/apiClient";
-import type { OrderListResponse, ProductDTO, PromotionListResponse } from "@repo/shared";
+import type { CategoryDTO, OrderListResponse, ProductDTO, PromotionListResponse } from "@repo/shared";
 
 export const dynamic = "force-dynamic";
 
-type Category = { id: string; slug: string; name: string };
 type ProductList = { items: ProductDTO[]; nextCursor: string | null };
 
 export default async function AdminDashboardPage() {
@@ -13,8 +12,8 @@ export default async function AdminDashboardPage() {
     // of each resource and use the length as a "≥ N" indicator.
     const [{ categories }, { items: products }, { items: orders }, { items: promotions }] =
         await Promise.all([
-            api.get<{ categories: Category[] }>("/categories").catch(() => ({
-                categories: [] as Category[],
+            api.get<{ categories: CategoryDTO[] }>("/categories").catch(() => ({
+                categories: [] as CategoryDTO[],
             })),
             api.get<ProductList>("/products?limit=50").catch(() => ({
                 items: [] as ProductDTO[],

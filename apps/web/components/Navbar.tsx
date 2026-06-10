@@ -2,16 +2,14 @@
 import { Search, User } from "lucide-react";
 import { api } from "@/services/apiClient";
 import { getCurrentUser } from "@/lib/auth";
-import type { CartDTO } from "@repo/shared";
+import type { CartDTO, CategoryDTO } from "@repo/shared";
 import CartBadge from "./CartBadge";
-
-type Category = { id: string; slug: string; name: string };
 
 export default async function Navbar() {
     const [{ categories }, user] = await Promise.all([
         api
-            .get<{ categories: Category[] }>("/categories?parentId=null", { cache: "no-store" })
-            .catch(() => ({ categories: [] as Category[] })),
+            .get<{ categories: CategoryDTO[] }>("/categories?parentId=null", { cache: "no-store" })
+            .catch(() => ({ categories: [] as CategoryDTO[] })),
         getCurrentUser(),
     ]);
 

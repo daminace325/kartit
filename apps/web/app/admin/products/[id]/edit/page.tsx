@@ -2,12 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { api, ApiClientError } from "@/services/apiClient";
-import type { ProductDTO } from "@repo/shared";
+import type { CategoryDTO, ProductDTO } from "@repo/shared";
 import ProductForm from "../../ProductForm";
 
 export const dynamic = "force-dynamic";
-
-type Category = { id: string; slug: string; name: string };
 
 export default async function EditProductPage({
     params,
@@ -26,7 +24,7 @@ export default async function EditProductPage({
         throw err;
     }
 
-    const { categories } = await api.get<{ categories: Category[] }>("/categories");
+    const { categories } = await api.get<{ categories: CategoryDTO[] }>("/categories");
 
     return (
         <div className="px-8 py-8">

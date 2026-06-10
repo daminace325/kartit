@@ -2,11 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { api, ApiClientError } from "@/services/apiClient";
+import type { CategoryDTO } from "@repo/shared";
 import CategoryForm from "../../CategoryForm";
 
 export const dynamic = "force-dynamic";
-
-type Category = { id: string; slug: string; name: string; parentId: string | null; isActive: boolean };
 
 export default async function EditCategoryPage({
     params,
@@ -15,9 +14,9 @@ export default async function EditCategoryPage({
 }) {
     const { id } = await params;
 
-    let category: Category;
+    let category: CategoryDTO;
     try {
-        ({ category } = await api.get<{ category: Category }>(
+        ({ category } = await api.get<{ category: CategoryDTO }>(
             `/categories/${encodeURIComponent(id)}?includeInactive=true`,
         ));
     } catch (err) {
@@ -26,7 +25,7 @@ export default async function EditCategoryPage({
     }
 
     // Only top-level categories may be parents.
-    const { categories: topLevel } = await api.get<{ categories: Category[] }>(
+    const { categories: topLevel } = await api.get<{ categories: CategoryDTO[] }>(
         "/categories?parentId=null",
     );
 

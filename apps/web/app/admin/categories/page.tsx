@@ -1,14 +1,13 @@
 ﻿import Link from "next/link";
 import { Plus, Pencil } from "lucide-react";
 import { api } from "@/services/apiClient";
+import type { CategoryDTO } from "@repo/shared";
 import DeleteButton from "@/components/DeleteButton";
 
 export const dynamic = "force-dynamic";
 
-type Category = { id: string; slug: string; name: string; parentId: string | null; isActive: boolean };
-
 export default async function AdminCategoriesPage() {
-    const { categories } = await api.get<{ categories: Category[] }>("/categories?includeInactive=true");
+    const { categories } = await api.get<{ categories: CategoryDTO[] }>("/categories?includeInactive=true");
     const nameById = new Map(categories.map((c) => [c.id, c.name]));
 
     return (
