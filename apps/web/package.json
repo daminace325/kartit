@@ -9,7 +9,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@repo/db": "*",
     "@repo/shared": "*",
     "@stripe/react-stripe-js": "^6.3.0",
     "@stripe/stripe-js": "^9.4.0",
