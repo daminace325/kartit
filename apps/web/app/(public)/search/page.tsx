@@ -1,9 +1,7 @@
 ﻿import Link from "next/link";
 import { api } from "@/services/apiClient";
-import type { ProductDTO } from "@repo/shared";
+import type { ProductListResponse } from "@repo/shared";
 import ProductCard from "@/components/ProductCard";
-
-type ProductList = { items: ProductDTO[]; nextCursor: string | null };
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +22,7 @@ export default async function SearchPage({
     }
 
     const cursorQs = sp.cursor ? `&cursor=${encodeURIComponent(sp.cursor)}` : "";
-    const { items, nextCursor } = await api.get<ProductList>(
+    const { items, nextCursor } = await api.get<ProductListResponse>(
         `/products?q=${encodeURIComponent(q)}&limit=24${cursorQs}`,
     );
 

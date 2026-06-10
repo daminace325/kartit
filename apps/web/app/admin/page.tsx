@@ -1,11 +1,9 @@
 ﻿import Link from "next/link";
 import { Package, FolderTree, ShoppingBag, Tag } from "lucide-react";
 import { api } from "@/services/apiClient";
-import type { CategoryDTO, OrderListResponse, ProductDTO, PromotionListResponse } from "@repo/shared";
+import type { CategoryDTO, OrderListResponse, ProductDTO, ProductListResponse, PromotionListResponse } from "@repo/shared";
 
 export const dynamic = "force-dynamic";
-
-type ProductList = { items: ProductDTO[]; nextCursor: string | null };
 
 export default async function AdminDashboardPage() {
     // The Express API doesn't expose count endpoints in P1 — we fetch a page
@@ -15,7 +13,7 @@ export default async function AdminDashboardPage() {
             api.get<{ categories: CategoryDTO[] }>("/categories").catch(() => ({
                 categories: [] as CategoryDTO[],
             })),
-            api.get<ProductList>("/products?limit=50").catch(() => ({
+            api.get<ProductListResponse>("/products?limit=50").catch(() => ({
                 items: [] as ProductDTO[],
                 nextCursor: null,
             })),

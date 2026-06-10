@@ -1,16 +1,14 @@
 import Link from "next/link";
 import { Plus, Pencil } from "lucide-react";
 import { api } from "@/services/apiClient";
-import { formatMoney, type ProductDTO } from "@repo/shared";
+import { formatMoney, type ProductListResponse } from "@repo/shared";
 import { productImageUrl } from "@/lib/image";
 import DeleteButton from "@/components/DeleteButton";
 
 export const dynamic = "force-dynamic";
 
-type ProductList = { items: ProductDTO[]; nextCursor: string | null };
-
 export default async function AdminProductsPage() {
-    const { items } = await api.get<ProductList>("/products?limit=50");
+    const { items } = await api.get<ProductListResponse>("/products?limit=50");
 
     return (
         <div className="px-8 py-8">

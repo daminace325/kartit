@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { api, ApiClientError } from "@/services/apiClient";
-import type { CategoryDTO, ProductDTO } from "@repo/shared";
+import type { CategoryDTO, ProductListResponse } from "@repo/shared";
 import ProductCard from "@/components/ProductCard";
-type ProductList = { items: ProductDTO[]; nextCursor: string | null };
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +45,7 @@ export default async function CategoryPage({
         : null;
 
     const cursorQs = sp.cursor ? `&cursor=${encodeURIComponent(sp.cursor)}` : "";
-    const { items, nextCursor } = await api.get<ProductList>(
+    const { items, nextCursor } = await api.get<ProductListResponse>(
         `/products?categoryIds=${encodeURIComponent(ids.join(","))}&limit=24${cursorQs}`,
     );
 

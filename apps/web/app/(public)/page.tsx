@@ -1,8 +1,7 @@
 ﻿import Link from "next/link";
 import { api } from "@/services/apiClient";
-import type { CategoryDTO, ProductDTO } from "@repo/shared";
+import type { CategoryDTO, ProductDTO, ProductListResponse } from "@repo/shared";
 import ProductCard from "@/components/ProductCard";
-type ProductList = { items: ProductDTO[]; nextCursor: string | null };
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +32,7 @@ export default async function HomePage() {
         topCategories.map(async (cat) => {
             const ids = [cat.id, ...(childrenByParent.get(cat.id) ?? [])];
             const { items } = await api
-                .get<ProductList>(
+                .get<ProductListResponse>(
                     `/products?categoryIds=${encodeURIComponent(
                         ids.join(","),
                     )}&limit=${PRODUCTS_PER_CATEGORY}`,

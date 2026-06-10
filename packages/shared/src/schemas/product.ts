@@ -69,3 +69,9 @@ export type ProductDTO = {
     categoryId: string;
     images: ProductImageDTO[];
 };
+
+/** Standard response shape for paginated product list endpoints. */
+export type ProductListResponse = {
+    items: ProductDTO[];
+    nextCursor: string | null;
+};
