@@ -7,10 +7,11 @@
  * The reconciliation worker picks it up and runs a full Stripe reconciliation
  * pass (P2.5).
  */
+import { logger } from "../lib/logger";
 import { reconciliationQueue } from "../queues/reconciliation";
 
 async function main(): Promise<void> {
-    console.log("[trigger-reconciliation] enqueuing reconciliation.daily job...");
+    logger.info("[trigger-reconciliation] enqueuing reconciliation.daily job...");
 
     const job = await reconciliationQueue.add("reconciliation.daily", {
         aggregateType: "System",
@@ -19,13 +20,13 @@ async function main(): Promise<void> {
         payload: {},
     });
 
-    console.log(`[trigger-reconciliation] enqueued job id=${job.id}`);
+    logger.info(`[trigger-reconciliation] enqueued job id=${job.id}`);
 
     await reconciliationQueue.close();
     process.exit(0);
 }
 
 main().catch((err) => {
-    console.error("[trigger-reconciliation] fatal:", err);
+    logger.error("[trigger-reconciliation] fatal:", err);
     process.exit(1);
 });

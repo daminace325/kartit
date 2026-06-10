@@ -1,4 +1,5 @@
 import { Worker } from "bullmq";
+import { logger } from "../lib/logger";
 import { REDIS_URL } from "../lib/redis";
 
 /**
@@ -18,37 +19,37 @@ const worker = new Worker(
     async (job) => {
         const { eventType, aggregateId, payload } = job.data;
 
-        console.log(
+        logger.info(
             `[emails] eventType=${eventType} aggregateType=Order aggregateId=${aggregateId}`,
         );
 
         switch (eventType) {
             case "email.send-order-confirmation":
-                console.log(
+                logger.info(
                     `[emails] → send order confirmation to ${payload?.email} for order ${payload?.orderNumber}`,
                 );
                 break;
 
             case "email.send-receipt":
-                console.log(
+                logger.info(
                     `[emails] → send payment receipt to ${payload?.email} for order ${payload?.orderNumber}`,
                 );
                 break;
 
             case "email.send-refund":
-                console.log(
+                logger.info(
                     `[emails] → send refund notice to ${payload?.email} for order ${payload?.orderNumber}`,
                 );
                 break;
 
             case "email.send-shipped":
-                console.log(
+                logger.info(
                     `[emails] → send shipping notice to ${payload?.email} for order ${payload?.orderNumber}`,
                 );
                 break;
 
             default:
-                console.log(
+                logger.info(
                     `[emails] unhandled eventType=${eventType}`,
                 );
         }
@@ -62,13 +63,13 @@ const worker = new Worker(
 );
 
 worker.on("failed", (job, err) => {
-    console.error(
+    logger.error(
         `[emails] job failed id=${job?.id} eventType=${job?.data?.eventType} err=${err.message}`,
     );
 });
 
 worker.on("error", (err) => {
-    console.error(`[emails] worker error: ${err.message}`);
+    logger.error(`[emails] worker error: ${err.message}`);
 });
 
 export { worker as emailsWorker };

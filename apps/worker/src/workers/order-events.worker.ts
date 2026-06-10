@@ -1,5 +1,6 @@
 import { Worker } from "bullmq";
 import { prisma } from "@repo/db";
+import { logger } from "../lib/logger";
 import { REDIS_URL } from "../lib/redis";
 
 /**
@@ -26,7 +27,7 @@ async function writeLedgerEntries(
         where: { reference: `outbox:${outboxId}` },
     });
     if (existing) {
-        console.log(
+        logger.info(
             `[order-events] ledger entries already exist for outbox=${outboxId}, skipping`,
         );
         return;
@@ -47,7 +48,7 @@ async function writeLedgerEntries(
         ),
     );
 
-    console.log(
+    logger.info(
         `[order-events] wrote ${entries.length} ledger entries for outbox=${outboxId} order=${orderId}`,
     );
 }
@@ -61,7 +62,7 @@ const worker = new Worker(
 
         switch (eventType) {
             case "OrderCreated":
-                console.log(
+                logger.info(
                     `[order-events] OrderCreated order=${aggregateId} orderNumber=${payload?.orderNumber}`,
                 );
                 // P2.15: dispatch email.send-order-confirmation
@@ -70,7 +71,7 @@ const worker = new Worker(
             case "OrderPaid": {
                 const totalMinor = BigInt(payload.totalMinor as string);
                 const providerPaymentId = payload.providerPaymentId as string | undefined;
-                console.log(
+                logger.info(
                     `[order-events] OrderPaid order=${aggregateId} total=${totalMinor}`,
                 );
                 // P2.4: double-entry — money came in → asset (CASH) goes up (DEBIT)
@@ -83,7 +84,7 @@ const worker = new Worker(
             }
 
             case "OrderCancelled":
-                console.log(
+                logger.info(
                     `[order-events] OrderCancelled order=${aggregateId}`,
                 );
                 // P2.7: release reservation
@@ -92,7 +93,7 @@ const worker = new Worker(
             case "OrderRefunded": {
                 const totalMinor = BigInt(payload.totalMinor as string);
                 const providerPaymentId = payload.providerPaymentId as string | undefined;
-                console.log(
+                logger.info(
                     `[order-events] OrderRefunded order=${aggregateId} total=${totalMinor}`,
                 );
                 // P2.4: double-entry — money goes out → asset (CASH) goes down (CREDIT)
@@ -105,13 +106,13 @@ const worker = new Worker(
             }
 
             case "OrderPaymentFailed":
-                console.log(
+                logger.info(
                     `[order-events] OrderPaymentFailed order=${aggregateId}`,
                 );
                 break;
 
             default:
-                console.log(
+                logger.info(
                     `[order-events] unhandled eventType=${eventType} order=${aggregateId}`,
                 );
         }
@@ -125,13 +126,13 @@ const worker = new Worker(
 );
 
 worker.on("failed", (job, err) => {
-    console.error(
+    logger.error(
         `[order-events] job failed id=${job?.id} eventType=${job?.data?.eventType} err=${err.message}`,
     );
 });
 
 worker.on("error", (err) => {
-    console.error(`[order-events] worker error: ${err.message}`);
+    logger.error(`[order-events] worker error: ${err.message}`);
 });
 
 export { worker as orderEventsWorker };

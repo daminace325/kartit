@@ -1,4 +1,5 @@
 import { Worker } from "bullmq";
+import { logger } from "../lib/logger";
 import { REDIS_URL } from "../lib/redis";
 import { runReconciliation } from "../lib/reconciliation";
 
@@ -17,17 +18,17 @@ const worker = new Worker(
     async (job) => {
         const { eventType, aggregateId } = job.data;
 
-        console.log(
+        logger.info(
             `[reconciliation] eventType=${eventType} aggregateId=${aggregateId}`,
         );
 
         switch (eventType) {
             case "reconciliation.daily": {
-                console.log(
+                logger.info(
                     `[reconciliation] → running Stripe reconciliation`,
                 );
                 const result = await runReconciliation();
-                console.log(
+                logger.info(
                     `[reconciliation] → complete: ` +
                         `transactions=${result.transactionCount} ` +
                         `matched=${result.matchedCount} ` +
@@ -38,7 +39,7 @@ const worker = new Worker(
             }
 
             default:
-                console.log(
+                logger.info(
                     `[reconciliation] unhandled eventType=${eventType}`,
                 );
         }
@@ -52,13 +53,13 @@ const worker = new Worker(
 );
 
 worker.on("failed", (job, err) => {
-    console.error(
+    logger.error(
         `[reconciliation] job failed id=${job?.id} eventType=${job?.data?.eventType} err=${err.message}`,
     );
 });
 
 worker.on("error", (err) => {
-    console.error(`[reconciliation] worker error: ${err.message}`);
+    logger.error(`[reconciliation] worker error: ${err.message}`);
 });
 
 export { worker as reconciliationWorker };

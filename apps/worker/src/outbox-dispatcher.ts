@@ -1,5 +1,6 @@
 import { prisma } from "@repo/db";
 import type { Queue } from "bullmq";
+import { logger } from "./lib/logger";
 import { getQueueForEvent } from "./queues/index";
 
 const MAX_ATTEMPTS = 5;
@@ -43,7 +44,7 @@ export function startOutboxDispatcher(
             });
 
             if (rows.length > 0) {
-                console.log(`[outbox-dispatcher] processing ${rows.length} PENDING rows`);
+                logger.info(`[outbox-dispatcher] processing ${rows.length} PENDING rows`);
             }
 
             for (const row of rows) {
@@ -59,7 +60,7 @@ export function startOutboxDispatcher(
                             status: "FAILED",
                         },
                     });
-                    console.warn(
+                    logger.warn(
                         `[outbox-dispatcher] unknown queue for eventType=${row.eventType} — marked FAILED`,
                     );
                     continue;
@@ -83,7 +84,7 @@ export function startOutboxDispatcher(
                         err instanceof Error ? err.message : String(err);
                     const newAttempts = row.attempts + 1;
 
-                    console.error(
+                    logger.error(
                         `[outbox-dispatcher] enqueue failed outboxId=${row.id} eventType=${row.eventType} attempt=${newAttempts} err=${errorMessage}`,
                     );
 
@@ -107,7 +108,7 @@ export function startOutboxDispatcher(
                     where: { status: "FAILED" },
                 });
                 if (failedCount > 0) {
-                    console.warn(
+                    logger.warn(
                         `[outbox-dispatcher] DLQ depth: ${failedCount} FAILED outbox rows`,
                     );
                 }
@@ -115,7 +116,7 @@ export function startOutboxDispatcher(
         } catch (err) {
             const message =
                 err instanceof Error ? err.message : String(err);
-            console.error(
+            logger.error(
                 `[outbox-dispatcher] poll error: ${message}`,
             );
         }
@@ -138,7 +139,7 @@ export function startOutboxDispatcher(
     process.on("SIGTERM", stop);
     process.on("SIGINT", stop);
 
-    console.log(
+    logger.info(
         `[outbox-dispatcher] started (pollInterval=${pollIntervalMs}ms batchSize=${batchSize})`,
     );
 }

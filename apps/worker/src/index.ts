@@ -13,6 +13,7 @@
  *   npm run build -w apps/worker && npm run start -w apps/worker  # production
  */
 
+import { logger } from "./lib/logger";
 import { queues } from "./queues/index";
 import { startOutboxDispatcher } from "./outbox-dispatcher";
 import {
@@ -39,7 +40,7 @@ async function shutdown(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
 
-    console.log("[worker] shutting down...");
+    logger.info("[worker] shutting down...");
 
     // Close all BullMQ workers first (stop accepting new jobs, wait for
     // in-flight jobs to finish).
@@ -48,11 +49,11 @@ async function shutdown(): Promise<void> {
     // Close all queue connections.
     for (const [name, queue] of Object.entries(queues)) {
         await queue.close().catch((err) => {
-            console.warn(`[worker] error closing queue ${name}: ${err.message}`);
+            logger.warn(`[worker] error closing queue ${name}: ${err.message}`);
         });
     }
 
-    console.log("[worker] shutdown complete");
+    logger.info("[worker] shutdown complete");
     process.exit(0);
 }
 
@@ -61,13 +62,13 @@ process.on("SIGINT", shutdown);
 
 // ── Startup ───────────────────────────────────────────────────────────────
 
-console.log("[worker] starting ecomm worker service...");
+logger.info("[worker] starting ecomm worker service...");
 
 // Start the outbox dispatcher (polls Outbox table → enqueues to BullMQ).
 startOutboxDispatcher(queues);
 
-console.log("[worker] workers running");
-console.log(
+logger.info("[worker] workers running");
+logger.info(
     `[worker] queues: ${Object.keys(queues).join(", ")}`,
 );
 

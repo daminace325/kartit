@@ -1,4 +1,5 @@
 import { prisma, Prisma } from "@repo/db";
+import { logger } from "./logger";
 import { getStripeWorker } from "./stripe";
 
 interface MismatchedRef {
@@ -121,7 +122,7 @@ export async function runReconciliation(): Promise<{
             } catch (err) {
                 const msg =
                     err instanceof Error ? err.message : String(err);
-                console.warn(
+                logger.warn(
                     `[reconciliation] could not resolve PI for bt=${bt.id} type=${bt.type}: ${msg}`,
                 );
                 continue;
@@ -211,14 +212,14 @@ export async function runReconciliation(): Promise<{
     });
 
     if (driftMinor !== 0n) {
-        console.warn(
+        logger.warn(
             `[reconciliation] DRIFT DETECTED: driftMinor=${driftMinor} ` +
                 `totalStripe=${totalStripeAmount} totalLedger=${totalLedgerAmount} ` +
                 `mismatched=${mismatchedRefs.length}`,
         );
     }
 
-    console.log(
+    logger.info(
         `[reconciliation] report id=${report.id} ` +
             `transactions=${transactionCount} matched=${matchedCount} ` +
             `drift=${driftMinor} mismatched=${mismatchedRefs.length}`,

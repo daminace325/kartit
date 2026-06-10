@@ -5,6 +5,7 @@ import {
     PaymentStatus,
     STOCK_HELD,
 } from "@repo/shared";
+import { logger } from "../lib/logger";
 import { REDIS_URL } from "../lib/redis";
 
 /**
@@ -46,7 +47,7 @@ async function handlePaymentIntentSucceeded(
     });
 
     if (!payment) {
-        console.log(
+        logger.info(
             `[webhooks-retry] payment_intent.succeeded — unknown PI ${paymentIntentId}`,
         );
         return;
@@ -59,7 +60,7 @@ async function handlePaymentIntentSucceeded(
 
     // Only flip from PENDING
     if (order.status !== OrderStatus.PENDING) {
-        console.log(
+        logger.info(
             `[webhooks-retry] payment_intent.succeeded — order ${order.id} not PENDING (status=${order.status}), skipping`,
         );
         return;
@@ -93,7 +94,7 @@ async function handlePaymentIntentSucceeded(
         });
     });
 
-    console.log(
+    logger.info(
         `[webhooks-retry] payment_intent.succeeded — order ${order.id} marked PAID`,
     );
 }
@@ -108,7 +109,7 @@ async function handlePaymentIntentFailed(
     });
 
     if (!payment) {
-        console.log(
+        logger.info(
             `[webhooks-retry] payment_intent.payment_failed — unknown PI ${paymentIntentId}`,
         );
         return;
@@ -154,7 +155,7 @@ async function handlePaymentIntentFailed(
         });
     });
 
-    console.log(
+    logger.info(
         `[webhooks-retry] payment_intent.payment_failed — order ${order.id} marked FAILED`,
     );
 }
@@ -168,7 +169,7 @@ async function handleChargeRefunded(
     });
 
     if (!payment) {
-        console.log(
+        logger.info(
             `[webhooks-retry] charge.refunded — unknown PI ${paymentIntentId}`,
         );
         return;
@@ -214,7 +215,7 @@ async function handleChargeRefunded(
         });
     });
 
-    console.log(
+    logger.info(
         `[webhooks-retry] charge.refunded — order ${order.id} marked REFUNDED`,
     );
 }
@@ -227,7 +228,7 @@ const worker = new Worker(
         const { webhookEventId } = job.data;
 
         if (!webhookEventId) {
-            console.log(
+            logger.info(
                 "[webhooks-retry] missing webhookEventId in job data, skipping",
             );
             return;
@@ -239,14 +240,14 @@ const worker = new Worker(
         });
 
         if (!event) {
-            console.log(
+            logger.info(
                 `[webhooks-retry] webhookEvent ${webhookEventId} not found, skipping`,
             );
             return;
         }
 
         if (event.processedAt) {
-            console.log(
+            logger.info(
                 `[webhooks-retry] webhookEvent ${webhookEventId} already processed, skipping`,
             );
             return;
@@ -254,7 +255,7 @@ const worker = new Worker(
 
         const payload = event.payload as unknown as StripeEventPayload;
 
-        console.log(
+        logger.info(
             `[webhooks-retry] processing eventId=${webhookEventId} type=${payload.type} attempt=${event.attempts + 1}`,
         );
 
@@ -279,7 +280,7 @@ const worker = new Worker(
                 break;
             }
             default:
-                console.log(
+                logger.info(
                     `[webhooks-retry] unhandled event type: ${payload.type}`,
                 );
                 break;
@@ -291,7 +292,7 @@ const worker = new Worker(
             data: { processedAt: new Date() },
         });
 
-        console.log(
+        logger.info(
             `[webhooks-retry] successfully processed webhookEventId=${webhookEventId}`,
         );
     },
@@ -305,7 +306,7 @@ const worker = new Worker(
 
 worker.on("failed", async (job, err) => {
     const webhookEventId = job?.data?.webhookEventId as string | undefined;
-    console.error(
+    logger.error(
         `[webhooks-retry] job failed id=${job?.id} webhookEventId=${webhookEventId} err=${err.message}`,
     );
 
@@ -322,7 +323,7 @@ worker.on("failed", async (job, err) => {
                 },
             });
         } catch (updateErr) {
-            console.error(
+            logger.error(
                 `[webhooks-retry] failed to update lastError for ${webhookEventId}: ${(updateErr as Error).message}`,
             );
         }
@@ -330,7 +331,7 @@ worker.on("failed", async (job, err) => {
 });
 
 worker.on("error", (err) => {
-    console.error(`[webhooks-retry] worker error: ${err.message}`);
+    logger.error(`[webhooks-retry] worker error: ${err.message}`);
 });
 
 export { worker as webhooksRetryWorker };

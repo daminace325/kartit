@@ -1,4 +1,5 @@
 import { Worker } from "bullmq";
+import { logger } from "../lib/logger";
 import { REDIS_URL } from "../lib/redis";
 
 /**
@@ -13,20 +14,20 @@ const worker = new Worker(
     async (job) => {
         const { eventType } = job.data;
 
-        console.log(
+        logger.info(
             `[inventory-sweep] eventType=${eventType}`,
         );
 
         switch (eventType) {
             case "inventory.sweep-abandoned":
-                console.log(
+                logger.info(
                     `[inventory-sweep] → sweep abandoned PENDING orders older than 30 min`,
                 );
                 // P2.7: move sweep logic here from apps/api/src/jobs/
                 break;
 
             default:
-                console.log(
+                logger.info(
                     `[inventory-sweep] unhandled eventType=${eventType}`,
                 );
         }
@@ -40,13 +41,13 @@ const worker = new Worker(
 );
 
 worker.on("failed", (job, err) => {
-    console.error(
+    logger.error(
         `[inventory-sweep] job failed id=${job?.id} eventType=${job?.data?.eventType} err=${err.message}`,
     );
 });
 
 worker.on("error", (err) => {
-    console.error(`[inventory-sweep] worker error: ${err.message}`);
+    logger.error(`[inventory-sweep] worker error: ${err.message}`);
 });
 
 export { worker as inventorySweepWorker };
