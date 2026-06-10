@@ -96,8 +96,7 @@ export default function PromotionForm({ mode, initial }: Props) {
                 }
             }
         } catch (err) {
-            // @ts-expect-error err is unknown from catch
-            setError(err.message ?? "Invalid value");
+            setError(err instanceof Error ? err.message : String(err));
             return;
         }
 
