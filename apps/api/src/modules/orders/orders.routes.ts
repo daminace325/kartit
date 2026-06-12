@@ -4,6 +4,7 @@ import {
     orderListQuerySchema,
     orderStatusUpdateSchema,
     refundRequestBodySchema,
+    refundRequestListQuerySchema,
     idParamSchema,
 } from "@repo/shared";
 import { validate } from "../../middlewares/validate";
@@ -32,7 +33,7 @@ ordersRouter.get("/", validate(orderListQuerySchema, "query"), listOrders);
 ordersRouter.post("/", validate(orderCreateSchema), idempotency, createOrder);
 
 // Refund request admin endpoints — must be before /:id routes.
-ordersRouter.get("/refund-requests", requireAdmin, listRefundRequests);
+ordersRouter.get("/refund-requests", requireAdmin, validate(refundRequestListQuerySchema, "query"), listRefundRequests);
 ordersRouter.post("/refund-requests/:id/approve", requireAdmin, validate(idParamSchema, "params"), approveRefundRequest);
 ordersRouter.post("/refund-requests/:id/reject", requireAdmin, validate(idParamSchema, "params"), rejectRefundRequest);
 

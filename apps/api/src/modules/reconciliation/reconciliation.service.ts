@@ -21,7 +21,7 @@ export const reconciliationService = {
     async list(limit = 20): Promise<ReconciliationReportDTO[]> {
         const reports = await prisma.reconciliationReport.findMany({
             orderBy: { runAt: "desc" },
-            take: Math.min(limit, 100),
+            take: limit,
         });
 
         return reports.map((r) => ({

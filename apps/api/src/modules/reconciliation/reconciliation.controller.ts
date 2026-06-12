@@ -4,11 +4,8 @@ import { asyncHandler } from "../../lib/asyncHandler";
 import { AppError } from "../../lib/errors";
 
 export const listReports: RequestHandler = asyncHandler(async (req, res) => {
-    const limitRaw = req.query.limit;
-    const limit = typeof limitRaw === "string"
-        ? parseInt(limitRaw, 10)
-        : 20;
-    const reports = await reconciliationService.list(Math.min(limit, 100));
+    const { limit } = req.query as unknown as { limit: number };
+    const reports = await reconciliationService.list(limit);
     res.json({ reports });
 });
 

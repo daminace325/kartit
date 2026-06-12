@@ -98,7 +98,7 @@ export const ledgerService = {
         startDate?: string,
         endDate?: string,
         cursor?: string,
-        limit = 50,
+        limit = 20,
     ): Promise<{ items: unknown[]; nextCursor: string | null }> {
         const where: Prisma.LedgerEntryWhereInput = {};
         if (account) where.account = account;

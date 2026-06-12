@@ -38,6 +38,13 @@ export const orderStatusUpdateSchema = z.object({
 });
 export type OrderStatusUpdateInput = z.infer<typeof orderStatusUpdateSchema>;
 
+export const refundRequestListQuerySchema = z.object({
+    status: z.string().optional(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type RefundRequestListQuery = z.infer<typeof refundRequestListQuerySchema>;
+
 export const refundRequestBodySchema = z.object({
     reason: z.string().min(1).max(1000).optional(),
 });
