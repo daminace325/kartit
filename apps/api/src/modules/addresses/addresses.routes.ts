@@ -11,7 +11,10 @@ import {
 
 export const addressesRouter: Router = Router();
 
-addressesRouter.get("/", requireAuth, listAddresses);
-addressesRouter.post("/", requireAuth, validate(addressInputSchema), createAddress);
-addressesRouter.put("/:id", requireAuth, validate(idParamSchema, "params"), validate(addressInputSchema), updateAddress);
-addressesRouter.delete("/:id", requireAuth, validate(idParamSchema, "params"), deleteAddress);
+// All address routes require an authenticated user.
+addressesRouter.use(requireAuth);
+
+addressesRouter.get("/", listAddresses);
+addressesRouter.post("/", validate(addressInputSchema), createAddress);
+addressesRouter.put("/:id", validate(idParamSchema, "params"), validate(addressInputSchema), updateAddress);
+addressesRouter.delete("/:id", validate(idParamSchema, "params"), deleteAddress);
