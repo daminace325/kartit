@@ -10,6 +10,7 @@ import {
     RotateCcw,
     Receipt,
 } from "lucide-react";
+import CursorPagination from "@/components/CursorPagination";
 
 export const dynamic = "force-dynamic";
 
@@ -413,16 +414,10 @@ export default async function AdminLedgerPage({
                 )}
 
                 {/* Load more */}
-                {nextCursor && (
-                    <div className="mt-6 flex justify-center">
-                        <Link
-                            href={`/admin/ledger?${loadMoreParams.toString()}`}
-                            className="rounded-md border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
-                        >
-                            Load more →
-                        </Link>
-                    </div>
-                )}
+                <CursorPagination
+                    nextCursor={nextCursor}
+                    href={`/admin/ledger?${loadMoreParams.toString()}`}
+                />
             </section>
         </div>
     );

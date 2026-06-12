@@ -5,6 +5,7 @@ import { authRequired } from "@/lib/auth";
 import { formatMoney, type OrderListResponse } from "@repo/shared";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from "@/constants/order-status";
 import { formatDate } from "@/lib/dates";
+import CursorPagination from "@/components/CursorPagination";
 
 export const dynamic = "force-dynamic";
 
@@ -105,16 +106,11 @@ export default async function OrdersPage({
                         })}
                     </div>
 
-                    {nextCursor && (
-                        <div className="mt-8 flex justify-center">
-                            <Link
-                                href={`/orders?cursor=${encodeURIComponent(nextCursor)}`}
-                                className="rounded-md border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
-                            >
-                                Load more →
-                            </Link>
-                        </div>
-                    )}
+                    <CursorPagination
+                        nextCursor={nextCursor}
+                        href={`/orders?cursor=${encodeURIComponent(nextCursor!)}`}
+                        className="mt-8"
+                    />
                 </>
             )}
         </div>

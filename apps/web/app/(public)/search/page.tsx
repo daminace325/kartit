@@ -1,7 +1,7 @@
-﻿import Link from "next/link";
-import { api } from "@/services/apiClient";
+﻿import { api } from "@/services/apiClient";
 import type { ProductListResponse } from "@repo/shared";
 import ProductCard from "@/components/ProductCard";
+import CursorPagination from "@/components/CursorPagination";
 
 export const dynamic = "force-dynamic";
 
@@ -44,16 +44,11 @@ export default async function SearchPage({
                 </div>
             )}
 
-            {nextCursor && (
-                <div className="mt-10 flex justify-center">
-                    <Link
-                        href={`/search?q=${encodeURIComponent(q)}&cursor=${encodeURIComponent(nextCursor)}`}
-                        className="rounded-md border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
-                    >
-                        Load more →
-                    </Link>
-                </div>
-            )}
+            <CursorPagination
+                nextCursor={nextCursor}
+                href={`/search?q=${encodeURIComponent(q)}&cursor=${encodeURIComponent(nextCursor!)}`}
+                className="mt-10"
+            />
         </div>
     );
 }

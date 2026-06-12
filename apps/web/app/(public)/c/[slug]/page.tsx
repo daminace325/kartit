@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { api, ApiClientError } from "@/services/apiClient";
 import type { CategoryDTO, ProductListResponse } from "@repo/shared";
 import ProductCard from "@/components/ProductCard";
+import CursorPagination from "@/components/CursorPagination";
 
 export const dynamic = "force-dynamic";
 
@@ -95,16 +96,11 @@ export default async function CategoryPage({
                 </div>
             )}
 
-            {nextCursor && (
-                <div className="mt-10 flex justify-center">
-                    <Link
-                        href={`/c/${slug}?cursor=${encodeURIComponent(nextCursor)}`}
-                        className="rounded-md border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
-                    >
-                        Load more →
-                    </Link>
-                </div>
-            )}
+            <CursorPagination
+                nextCursor={nextCursor}
+                href={`/c/${slug}?cursor=${encodeURIComponent(nextCursor!)}`}
+                className="mt-10"
+            />
         </div>
     );
 }

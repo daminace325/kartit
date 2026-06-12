@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { api } from "@/services/apiClient";
 import RefundRequestActions from "@/components/RefundRequestActions";
+import CursorPagination from "@/components/CursorPagination";
 import { formatDate } from "@/lib/dates";
 import { formatMoney } from "@repo/shared";
 
@@ -184,16 +185,10 @@ export default async function AdminRefundRequestsPage({
                 </div>
             )}
 
-            {nextCursor && (
-                <div className="mt-6 flex justify-center">
-                    <Link
-                        href={`/admin/refund-requests?tab=${tab}&cursor=${encodeURIComponent(nextCursor)}`}
-                        className="rounded-md border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
-                    >
-                        Load more →
-                    </Link>
-                </div>
-            )}
+            <CursorPagination
+                nextCursor={nextCursor}
+                href={`/admin/refund-requests?tab=${tab}&cursor=${encodeURIComponent(nextCursor!)}`}
+            />
         </div>
     );
 }
