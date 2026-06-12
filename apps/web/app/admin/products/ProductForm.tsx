@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Upload, X, Loader2 } from "lucide-react";
-import { minorToMajor, majorToMinor, type ProductDTO, type ProductImageDTO } from "@repo/shared";
+import { minorToMajor, majorToMinor, type DeleteImageInput, type ProductDTO, type ProductImageDTO } from "@repo/shared";
 import { slugify } from "@/lib/slugify";
 import { api } from "@/services/apiClient";
 import { useApiMutation } from "@/hooks/useApiMutation";
@@ -109,9 +109,10 @@ export default function ProductForm({ mode, initial, categoryOptions }: Props) {
         setImages((prev) => prev.filter((_, i) => i !== idx));
         // Best-effort cleanup of the orphaned Cloudinary asset (ignore errors).
         if (img?.publicId) {
+            const body: DeleteImageInput = { publicId: img.publicId };
             api.delete("/images", {
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ publicId: img.publicId }),
+                body: JSON.stringify(body),
             }).catch(() => undefined);
         }
     }
