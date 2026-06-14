@@ -56,5 +56,8 @@ prisma/*.db-journal
 # Docker volumes (if mapped locally)
 docker-data/
 
+# k6 load test result artifacts (machine-specific, can be large)
+k6/results/
+
 # Local-only working notes / handoff docs
 # context/
