@@ -4,7 +4,7 @@
 
 import { redis } from "./redis";
 import { logger } from "./logger";
-import type { CategoryDTO, ProductDTO } from "@repo/shared";
+import type { CategoryDTO, ProductDTO, PromotionType } from "@repo/shared";
 
 class TtlCache<T> {
     private prefix: string;
@@ -55,3 +55,18 @@ export const categoryListCache = new TtlCache<CategoryDTO[]>("cache:category:lis
 
 // Phase 2: Product caches
 export const productCache = new TtlCache<ProductDTO>("cache:product");
+
+// Phase 3: Promotion caches
+interface CachedPromotion {
+    id: string;
+    code: string;
+    type: PromotionType;
+    value: string; // bigint serialised
+    minSubtotalMinor: string | null;
+    maxUses: number | null;
+    maxUsesPerUser: number | null;
+    startsAt: string | null; // ISO
+    endsAt: string | null;
+    isActive: boolean;
+}
+export const promotionCache = new TtlCache<CachedPromotion>("cache:promotion");

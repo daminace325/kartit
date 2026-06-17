@@ -9,6 +9,9 @@ import {
     type PromotionListResponse,
 } from "@repo/shared";
 import { AppError } from "../../lib/errors";
+import { promotionCache } from "../../lib/cache";
+
+const CACHE_TTL = 60 * 1000; // 60 seconds
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toDTO(promo: any): PromotionDTO {
@@ -26,6 +29,34 @@ function toDTO(promo: any): PromotionDTO {
         isActive: promo.isActive,
         createdAt: promo.createdAt.toISOString(),
         updatedAt: promo.updatedAt.toISOString(),
+    };
+}
+
+/** Convert a Prisma promotion record to a JSON-serialisable cache entry.
+ *  bigint fields become strings; Date fields become ISO strings. */
+function toCachedPromotion(record: {
+    id: string;
+    code: string;
+    type: PromotionType;
+    value: bigint;
+    minSubtotalMinor: bigint | null;
+    maxUses: number | null;
+    maxUsesPerUser: number | null;
+    startsAt: Date | null;
+    endsAt: Date | null;
+    isActive: boolean;
+}) {
+    return {
+        id: record.id,
+        code: record.code,
+        type: record.type,
+        value: record.value.toString(),
+        minSubtotalMinor: record.minSubtotalMinor?.toString() ?? null,
+        maxUses: record.maxUses,
+        maxUsesPerUser: record.maxUsesPerUser,
+        startsAt: record.startsAt?.toISOString() ?? null,
+        endsAt: record.endsAt?.toISOString() ?? null,
+        isActive: record.isActive,
     };
 }
 
@@ -91,6 +122,9 @@ export const promotionsService = {
             include: { _count: { select: { orders: true } } },
         });
 
+        // Invalidate any stale cache entry for this code.
+        await promotionCache.del(`code:${input.code}`);
+
         return toDTO(promo);
     },
 
@@ -117,27 +151,42 @@ export const promotionsService = {
             include: { _count: { select: { orders: true } } },
         });
 
+        // Invalidate the cached record for this code (code is immutable).
+        await promotionCache.del(`code:${promo.code}`);
+
         return toDTO(updated);
     },
 
-    /** Validate a promotion code and compute the discount for a given subtotal. */
+    /** Validate a promotion code and compute the discount for a given subtotal.
+     *  The promotion record lookup is cached; the per-order usage counts always
+     *  hit Postgres to prevent coupon abuse. */
     async validate(
         code: string,
         subtotal: bigint,
         userId: string,
     ): Promise<ValidatedPromotion | null> {
-        const promo = await prisma.promotion.findUnique({
-            where: { code },
-        });
+        // Cache-aside: try cache first for the promotion record.
+        let promo = await promotionCache.get(`code:${code}`);
 
-        if (!promo) return null;
+        if (!promo) {
+            const record = await prisma.promotion.findUnique({
+                where: { code },
+            });
+            if (!record) return null;
+
+            promo = toCachedPromotion(record);
+            await promotionCache.set(`code:${code}`, promo, CACHE_TTL);
+        }
+
+        // Validate from the (possibly cached) record — no DB hit.
         if (!promo.isActive) return null;
 
         const now = new Date();
-        if (promo.startsAt && now < promo.startsAt) return null;
-        if (promo.endsAt && now > promo.endsAt) return null;
+        if (promo.startsAt && now < new Date(promo.startsAt)) return null;
+        if (promo.endsAt && now > new Date(promo.endsAt)) return null;
 
-        if (promo.minSubtotalMinor && subtotal < promo.minSubtotalMinor) return null;
+        const minSubtotal = promo.minSubtotalMinor ? BigInt(promo.minSubtotalMinor) : null;
+        if (minSubtotal && subtotal < minSubtotal) return null;
 
         // Usage counts exclude orders where the discount was effectively reversed.
         const invalidStatuses: OrderStatus[] = [
@@ -160,12 +209,13 @@ export const promotionsService = {
             if (userUseCount >= promo.maxUsesPerUser) return null;
         }
 
+        const promoValue = BigInt(promo.value);
         const discountMinor =
             promo.type === PromotionType.PERCENTAGE
-                ? (subtotal * promo.value + 5000n) / 10000n
-                : promo.value > subtotal
+                ? (subtotal * promoValue + 5000n) / 10000n
+                : promoValue > subtotal
                   ? subtotal
-                  : promo.value;
+                  : promoValue;
 
         return {
             id: promo.id,
