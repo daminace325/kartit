@@ -123,6 +123,18 @@ export function createApp() {
     });
     app.use("/orders", createOrderLimiter);
 
+    // Rate-limit cart summary — triggers promo-code validation (up to
+    // 3 extra DB queries) and stock revalidation, making it a target
+    // for promo-code enumeration.
+    const cartSummaryLimiter = createTokenBucketLimiter({
+        prefix: "ratelimit:cart-summary",
+        capacity: 20,
+        rate: 20 / (15 * 60),        // 20 tokens per 15-min window
+        keyGenerator: authenticatedKeyGenerator,
+        skip: () => skipIfDisabled(),
+    });
+    app.use("/cart/summary", cartSummaryLimiter);
+
     app.get("/", (req, res) => {
         res.json({ message: "API is running 🚀" });
     });
