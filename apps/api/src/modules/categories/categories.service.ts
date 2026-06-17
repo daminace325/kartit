@@ -5,7 +5,7 @@ import type {
     CategoryUpdateInput,
 } from "@repo/shared";
 import { AppError } from "../../lib/errors";
-import { categoryCache, categoryListCache } from "../../lib/cache";
+import { categoryCache, categoryListCache, productCache } from "../../lib/cache";
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -221,21 +221,25 @@ export const categoriesService = {
     },
 
     async remove(id: string) {
-        // Fetch slug before the transaction for cache invalidation.
+        // Pre-fetch for cache invalidation before the transaction.
         const category = await prisma.category.findUnique({
             where: { id, deletedAt: null },
             select: { slug: true },
         });
 
-        await prisma.$transaction(async (tx) => {
-            // Collect subcategory ids (only 2-level nesting is enforced, so a
-            // single-level fetch is sufficient).
-            const children = await tx.category.findMany({
-                where: { parentId: id, deletedAt: null },
-                select: { id: true },
-            });
-            const categoryIds = [id, ...children.map((c) => c.id)];
+        const children = await prisma.category.findMany({
+            where: { parentId: id, deletedAt: null },
+            select: { id: true },
+        });
+        const categoryIds = [id, ...children.map((c) => c.id)];
 
+        // Fetch affected product IDs/slugs for cascade invalidation (Phase 2).
+        const affectedProducts = await prisma.product.findMany({
+            where: { categoryId: { in: categoryIds }, deletedAt: null },
+            select: { id: true, slug: true },
+        });
+
+        await prisma.$transaction(async (tx) => {
             // Soft-delete products belonging to this category or its children.
             await tx.product.updateMany({
                 where: { categoryId: { in: categoryIds }, deletedAt: null },
@@ -257,11 +261,21 @@ export const categoriesService = {
             });
         });
 
-        // Invalidate cache after successful deletion.
+        // Invalidate category caches.
         await Promise.all([
             categoryListCache.del("main"),
             categoryCache.del(`id:${id}`),
             ...(category ? [categoryCache.del(`slug:${category.slug}`)] : []),
         ]);
+
+        // Cascade: invalidate product caches for all affected products (Phase 2).
+        if (affectedProducts.length > 0) {
+            await Promise.all(
+                affectedProducts.flatMap((p) => [
+                    productCache.del(`id:${p.id}`),
+                    productCache.del(`slug:${p.slug}`),
+                ]),
+            );
+        }
     },
 };

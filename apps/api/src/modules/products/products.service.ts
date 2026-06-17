@@ -9,6 +9,9 @@ import type {
 } from "@repo/shared";
 import { destroyByPublicIds } from "../../lib/cloudinary";
 import { AppError } from "../../lib/errors";
+import { productCache } from "../../lib/cache";
+
+const CACHE_TTL = 30 * 1000; // 30 seconds
 
 type ProductWithImages = Prisma.ProductGetPayload<{
     include: { images: true };
@@ -94,15 +97,24 @@ export const productsService = {
     },
 
     async getById(id: string) {
+        const cached = await productCache.get(`id:${id}`);
+        if (cached) return cached;
+
         const product = await prisma.product.findUnique({
             where: { id, isActive: true, deletedAt: null, category: { isActive: true, deletedAt: null } },
             include: { images: true },
         });
         if (!product) throw AppError.notFound("NOT_FOUND", "Product not found");
-        return toProductDTO(product);
+
+        const dto = toProductDTO(product);
+        await productCache.set(`id:${id}`, dto, CACHE_TTL);
+        return dto;
     },
 
     async getBySlug(slug: string) {
+        const cached = await productCache.get(`slug:${slug}`);
+        if (cached) return cached;
+
         const product = await prisma.product.findUnique({
             where: { slug, deletedAt: null },
             include: { images: true, category: { select: { isActive: true } } },
@@ -110,7 +122,10 @@ export const productsService = {
         if (!product || !product.isActive || !product.category.isActive) {
             throw AppError.notFound("NOT_FOUND", "Product not found");
         }
-        return toProductDTO(product);
+
+        const dto = toProductDTO(product);
+        await productCache.set(`slug:${slug}`, dto, CACHE_TTL);
+        return dto;
     },
 
     async create(input: ProductCreateInput) {
@@ -246,13 +261,27 @@ export const productsService = {
             destroyByPublicIds(removedPublicIds).catch(() => {});
         }
 
-        return toProductDTO(updated);
+        const result = toProductDTO(updated);
+
+        // Invalidate affected cache keys.
+        const slugChanged = input.slug && input.slug !== existing.slug;
+        await Promise.all([
+            productCache.del(`id:${id}`),
+            ...(slugChanged
+                ? [
+                      productCache.del(`slug:${existing.slug}`),
+                      productCache.del(`slug:${input.slug}`),
+                  ]
+                : []),
+        ]);
+
+        return result;
     },
 
     async remove(id: string) {
         const product = await prisma.product.findUnique({
             where: { id, deletedAt: null },
-            select: { id: true, name: true },
+            select: { id: true, slug: true, name: true },
         });
         if (!product) throw AppError.notFound("NOT_FOUND", "Product not found");
 
@@ -278,5 +307,11 @@ export const productsService = {
             where: { id },
             data: { deletedAt: new Date(), isActive: false },
         });
+
+        // Invalidate cache after successful deletion.
+        await Promise.all([
+            productCache.del(`id:${id}`),
+            productCache.del(`slug:${product.slug}`),
+        ]);
     },
 };

@@ -4,7 +4,7 @@
 
 import { redis } from "./redis";
 import { logger } from "./logger";
-import type { CategoryDTO } from "@repo/shared";
+import type { CategoryDTO, ProductDTO } from "@repo/shared";
 
 class TtlCache<T> {
     private prefix: string;
@@ -52,3 +52,6 @@ export const userCache = new TtlCache<CachedUser>("cache:user");
 // Phase 1: Category caches
 export const categoryCache = new TtlCache<CategoryDTO>("cache:category");
 export const categoryListCache = new TtlCache<CategoryDTO[]>("cache:category:list");
+
+// Phase 2: Product caches
+export const productCache = new TtlCache<ProductDTO>("cache:product");
