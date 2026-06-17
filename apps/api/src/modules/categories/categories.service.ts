@@ -5,6 +5,9 @@ import type {
     CategoryUpdateInput,
 } from "@repo/shared";
 import { AppError } from "../../lib/errors";
+import { categoryCache, categoryListCache } from "../../lib/cache";
+
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const SELECT = {
     id: true,
@@ -60,6 +63,13 @@ async function assertValidParent(parentId: string, selfId?: string) {
 
 export const categoriesService = {
     async list(query: CategoryListQuery = {}) {
+        // Only cache the default unfiltered list (nav menus, general use).
+        const isDefaultQuery = !query.parentId && !query.includeInactive;
+        if (isDefaultQuery) {
+            const cached = await categoryListCache.get("main");
+            if (cached) return cached;
+        }
+
         const isActive = query.includeInactive ? undefined : true;
         const where =
             query.parentId === undefined
@@ -68,28 +78,50 @@ export const categoriesService = {
                     ? { parentId: null, deletedAt: null, isActive }
                     : { parentId: query.parentId, deletedAt: null, isActive };
 
-        return prisma.category.findMany({
+        const result = await prisma.category.findMany({
             where,
             orderBy: { name: "asc" },
             select: SELECT,
         });
+
+        if (isDefaultQuery) {
+            await categoryListCache.set("main", result, CACHE_TTL);
+        }
+
+        return result;
     },
 
     async getById(id: string, opts?: { includeInactive?: boolean }) {
+        // Only cache public (active-only) lookups.
+        if (!opts?.includeInactive) {
+            const cached = await categoryCache.get(`id:${id}`);
+            if (cached) return cached;
+        }
+
         const category = await prisma.category.findUnique({
             where: { id, deletedAt: null, isActive: opts?.includeInactive ? undefined : true },
             select: SELECT,
         });
         if (!category) throw AppError.notFound("NOT_FOUND", "Category not found");
+
+        if (!opts?.includeInactive) {
+            await categoryCache.set(`id:${id}`, category, CACHE_TTL);
+        }
+
         return category;
     },
 
     async getBySlug(slug: string) {
+        const cached = await categoryCache.get(`slug:${slug}`);
+        if (cached) return cached;
+
         const category = await prisma.category.findUnique({
             where: { slug, deletedAt: null, isActive: true },
             select: SELECT,
         });
         if (!category) throw AppError.notFound("NOT_FOUND", "Category not found");
+
+        await categoryCache.set(`slug:${slug}`, category, CACHE_TTL);
         return category;
     },
 
@@ -115,7 +147,7 @@ export const categoriesService = {
         const parentId = normalizeParentId(input);
         if (parentId) await assertValidParent(parentId);
 
-        return prisma.category.create({
+        const category = await prisma.category.create({
             data: {
                 slug: input.slug,
                 name: input.name,
@@ -124,12 +156,17 @@ export const categoriesService = {
             },
             select: SELECT,
         });
+
+        // Invalidate the full list; individual keys will be populated on next read.
+        await categoryListCache.del("main");
+
+        return category;
     },
 
     async update(id: string, input: CategoryUpdateInput) {
         const current = await prisma.category.findUnique({
             where: { id, deletedAt: null },
-            select: { id: true, parentId: true },
+            select: { id: true, slug: true, parentId: true },
         });
         if (!current) throw AppError.notFound("NOT_FOUND", "Category not found");
 
@@ -156,7 +193,7 @@ export const categoriesService = {
         const parentId = normalizeParentId(input);
         if (parentId) await assertValidParent(parentId, id);
 
-        return prisma.category.update({
+        const category = await prisma.category.update({
             where: { id },
             data: {
                 ...(input.slug !== undefined ? { slug: input.slug } : {}),
@@ -166,9 +203,30 @@ export const categoriesService = {
             },
             select: SELECT,
         });
+
+        // Invalidate affected cache keys.
+        const slugChanged = input.slug && input.slug !== current.slug;
+        await Promise.all([
+            categoryListCache.del("main"),
+            categoryCache.del(`id:${id}`),
+            ...(slugChanged
+                ? [
+                      categoryCache.del(`slug:${current.slug}`),
+                      categoryCache.del(`slug:${input.slug}`),
+                  ]
+                : []),
+        ]);
+
+        return category;
     },
 
     async remove(id: string) {
+        // Fetch slug before the transaction for cache invalidation.
+        const category = await prisma.category.findUnique({
+            where: { id, deletedAt: null },
+            select: { slug: true },
+        });
+
         await prisma.$transaction(async (tx) => {
             // Collect subcategory ids (only 2-level nesting is enforced, so a
             // single-level fetch is sufficient).
@@ -198,5 +256,12 @@ export const categoriesService = {
                 data: { deletedAt: new Date(), isActive: false },
             });
         });
+
+        // Invalidate cache after successful deletion.
+        await Promise.all([
+            categoryListCache.del("main"),
+            categoryCache.del(`id:${id}`),
+            ...(category ? [categoryCache.del(`slug:${category.slug}`)] : []),
+        ]);
     },
 };

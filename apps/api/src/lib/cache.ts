@@ -4,6 +4,7 @@
 
 import { redis } from "./redis";
 import { logger } from "./logger";
+import type { CategoryDTO } from "@repo/shared";
 
 class TtlCache<T> {
     private prefix: string;
@@ -47,3 +48,7 @@ interface CachedUser {
 }
 
 export const userCache = new TtlCache<CachedUser>("cache:user");
+
+// Phase 1: Category caches
+export const categoryCache = new TtlCache<CategoryDTO>("cache:category");
+export const categoryListCache = new TtlCache<CategoryDTO[]>("cache:category:list");
