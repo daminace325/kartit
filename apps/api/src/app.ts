@@ -126,6 +126,17 @@ export function createApp() {
     });
     app.use("/auth/sign-out-all", signOutAllLimiter);
 
+    // Rate-limit profile updates — single-row user.update(), but
+    // concurrent writes could cause DB contention in an attack.
+    const profileUpdateLimiter = createTokenBucketLimiter({
+        prefix: "ratelimit:profile",
+        capacity: 10,
+        rate: 10 / (15 * 60),         // 10 per 15-min window
+        keyGenerator: authenticatedKeyGenerator,
+        skip: (req) => skipIfDisabled() || req.method !== "PATCH",
+    });
+    app.use("/auth/me", profileUpdateLimiter);
+
     const createOrderLimiter = createTokenBucketLimiter({
         prefix: "ratelimit:order",
         capacity: 20,
