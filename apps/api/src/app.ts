@@ -135,6 +135,17 @@ export function createApp() {
     });
     app.use("/cart/summary", cartSummaryLimiter);
 
+    // Rate-limit image uploads — Cloudinary bills by usage (bandwidth,
+    // storage, transformations) and multer buffers files in memory.
+    const imageUploadLimiter = createTokenBucketLimiter({
+        prefix: "ratelimit:upload",
+        capacity: 10,
+        rate: 10 / (15 * 60),        // 10 uploads per 15-min window
+        keyGenerator: authenticatedKeyGenerator,
+        skip: () => skipIfDisabled(),
+    });
+    app.use("/images/upload", imageUploadLimiter);
+
     app.get("/", (req, res) => {
         res.json({ message: "API is running 🚀" });
     });
