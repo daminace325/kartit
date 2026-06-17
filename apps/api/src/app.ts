@@ -146,6 +146,18 @@ export function createApp() {
     });
     app.use("/images/upload", imageUploadLimiter);
 
+    // Rate-limit cart mutations — add-to-cart is the most frequent
+    // mutation in e-commerce. Each call does product lookup, stock
+    // check, cart upsert, and a full cart re-read (4-6 DB queries).
+    const cartMutationLimiter = createTokenBucketLimiter({
+        prefix: "ratelimit:cart",
+        capacity: 60,
+        rate: 60 / (15 * 60),        // 60 tokens per 15-min window
+        keyGenerator: authenticatedKeyGenerator,
+        skip: (req) => skipIfDisabled() || req.method === "GET",
+    });
+    app.use("/cart", cartMutationLimiter);
+
     app.get("/", (req, res) => {
         res.json({ message: "API is running 🚀" });
     });
