@@ -9,9 +9,10 @@ import type {
 } from "@repo/shared";
 import { destroyByPublicIds } from "../../lib/cloudinary";
 import { AppError } from "../../lib/errors";
-import { productCache } from "../../lib/cache";
+import { productCache, productListCache } from "../../lib/cache";
 
 const CACHE_TTL = 30 * 1000; // 30 seconds
+const LIST_CACHE_TTL = 20 * 1000; // 20 seconds
 
 type ProductWithImages = Prisma.ProductGetPayload<{
     include: { images: true };
@@ -50,6 +51,14 @@ function toProductDTO(p: ProductWithImages): ProductDTO {
 export const productsService = {
     async list(query: ProductListQuery) {
         const { q, categoryId, categoryIds, cursor, limit } = query;
+
+        // Only cache the default homepage listing (no filters, no search, no pagination).
+        const isHomepage =
+            !q && !categoryId && !categoryIds && !cursor && limit === 20;
+        if (isHomepage) {
+            const cached = await productListCache.get("default");
+            if (cached) return cached;
+        }
 
         const idList = categoryIds
             ? categoryIds
@@ -93,7 +102,13 @@ export const productsService = {
         const items = (hasNext ? rows.slice(0, limit) : rows).map(toProductDTO);
         const nextCursor = hasNext ? items[items.length - 1].id : null;
 
-        return { items, nextCursor };
+        const result = { items, nextCursor };
+
+        if (isHomepage) {
+            await productListCache.set("default", result, LIST_CACHE_TTL);
+        }
+
+        return result;
     },
 
     async getById(id: string) {
@@ -176,6 +191,9 @@ export const productsService = {
             },
             include: { images: true },
         });
+
+        // Invalidate the homepage listing cache.
+        await productListCache.del("default");
 
         return toProductDTO(created);
     },
@@ -267,6 +285,7 @@ export const productsService = {
         const slugChanged = input.slug && input.slug !== existing.slug;
         await Promise.all([
             productCache.del(`id:${id}`),
+            productListCache.del("default"),
             ...(slugChanged
                 ? [
                       productCache.del(`slug:${existing.slug}`),
@@ -312,6 +331,7 @@ export const productsService = {
         await Promise.all([
             productCache.del(`id:${id}`),
             productCache.del(`slug:${product.slug}`),
+            productListCache.del("default"),
         ]);
     },
 };

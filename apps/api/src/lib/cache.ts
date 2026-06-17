@@ -4,7 +4,7 @@
 
 import { redis } from "./redis";
 import { logger } from "./logger";
-import type { CategoryDTO, ProductDTO, PromotionType } from "@repo/shared";
+import type { CategoryDTO, ProductDTO, ProductListResponse, PromotionType } from "@repo/shared";
 
 class TtlCache<T> {
     private prefix: string;
@@ -70,3 +70,6 @@ interface CachedPromotion {
     isActive: boolean;
 }
 export const promotionCache = new TtlCache<CachedPromotion>("cache:promotion");
+
+// Phase 4: Product list cache (homepage)
+export const productListCache = new TtlCache<ProductListResponse>("cache:product:list");

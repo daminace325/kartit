@@ -5,7 +5,7 @@ import type {
     CategoryUpdateInput,
 } from "@repo/shared";
 import { AppError } from "../../lib/errors";
-import { categoryCache, categoryListCache, productCache } from "../../lib/cache";
+import { categoryCache, categoryListCache, productCache, productListCache } from "../../lib/cache";
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -268,7 +268,8 @@ export const categoriesService = {
             ...(category ? [categoryCache.del(`slug:${category.slug}`)] : []),
         ]);
 
-        // Cascade: invalidate product caches for all affected products (Phase 2).
+        // Cascade: invalidate product caches for all affected products (Phase 2 + 4).
+        await productListCache.del("default");
         if (affectedProducts.length > 0) {
             await Promise.all(
                 affectedProducts.flatMap((p) => [
