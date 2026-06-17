@@ -158,6 +158,18 @@ export function createApp() {
     });
     app.use("/cart", cartMutationLimiter);
 
+    // Rate-limit public reads — products and categories are the
+    // highest-traffic endpoints and scraper targets. Generous limit
+    // (300/15min) keyed by IP to avoid false positives behind NAT.
+    const publicReadLimiter = createTokenBucketLimiter({
+        prefix: "ratelimit:public-read",
+        capacity: 300,
+        rate: 300 / (15 * 60),       // ~20 req/min sustained
+        skip: (req) => skipIfDisabled() || req.method !== "GET",
+    });
+    app.use("/products", publicReadLimiter);
+    app.use("/categories", publicReadLimiter);
+
     app.get("/", (req, res) => {
         res.json({ message: "API is running 🚀" });
     });
