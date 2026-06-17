@@ -114,6 +114,18 @@ export function createApp() {
     });
     app.use("/auth/change-password", changePasswordLimiter);
 
+    // Rate-limit sign-out-all — bumps tokenVersion in Postgres,
+    // invalidating all user sessions. A compromised cookie could be
+    // used to DoS the victim through constant session invalidation.
+    const signOutAllLimiter = createTokenBucketLimiter({
+        prefix: "ratelimit:signout-all",
+        capacity: 5,
+        rate: 5 / (15 * 60),         // 5 per 15-min window
+        keyGenerator: authenticatedKeyGenerator,
+        skip: () => skipIfDisabled(),
+    });
+    app.use("/auth/sign-out-all", signOutAllLimiter);
+
     const createOrderLimiter = createTokenBucketLimiter({
         prefix: "ratelimit:order",
         capacity: 20,
