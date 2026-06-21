@@ -74,6 +74,15 @@ export const env = {
 
     DISABLE_RATE_LIMITING: process.env.DISABLE_RATE_LIMITING === "true",
 
+    // Test/benchmark: start with the read cache disabled. The cache
+    // benchmark flips this at runtime via /internal/cache to A/B the
+    // DB-read reduction without restarting the API.
+    DISABLE_CACHE: process.env.DISABLE_CACHE === "true",
+
+    // Test/benchmark: expose /internal/metrics + /internal/cache routes
+    // and enable Prisma read-query counting. Must NEVER be true in production.
+    EXPOSE_TEST_METRICS: process.env.EXPOSE_TEST_METRICS === "true",
+
     // Test-only: bypass Stripe webhook signature verification so k6 can
     // simulate webhook events by POSTing JSON directly. Must NEVER be
     // enabled in production.

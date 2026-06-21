@@ -17,6 +17,7 @@ import { docsRouter } from "./modules/docs/docs.routes";
 import { ledgerRouter } from "./modules/ledger/ledger.routes";
 import { reconciliationRouter } from "./modules/reconciliation/reconciliation.routes";
 import { webhooksRouter } from "./modules/webhooks/webhooks.routes";
+import { internalRouter } from "./modules/internal/internal.routes";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 import { csrfMiddleware } from "./middlewares/csrf";
 import { createTokenBucketLimiter } from "./middlewares/rateLimiter";
@@ -210,6 +211,12 @@ export function createApp() {
     app.use("/admin/reconciliation", reconciliationRouter);
     app.use("/admin/webhooks", webhooksRouter);
     app.use("/docs", docsRouter);
+
+    // Test/benchmark-only metrics + cache-control endpoints. Never mounted
+    // in production (guarded by EXPOSE_TEST_METRICS).
+    if (env.EXPOSE_TEST_METRICS) {
+        app.use("/internal", internalRouter);
+    }
 
     app.use(notFoundHandler);
     app.use(errorHandler);

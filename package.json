@@ -30,6 +30,7 @@
     "cleanup:k6": "npx tsx scripts/cleanup-k6.ts",
     "seed:k6": "npx tsx scripts/seed-k6-users.ts",
     "verify:idem": "npx tsx scripts/verify-idempotency.ts",
+    "bench:cache": "npx tsx scripts/run-cache-benchmark.ts",
     "job:sweep": "ts-node apps/api/src/jobs/sweepAbandonedOrders.ts",
     "job:promote-idempotency": "ts-node apps/api/src/jobs/promoteIdempotencyKeys.ts",
     "job:reconcile": "npm run build:packages && npm run job:reconcile --workspace=apps/worker",
