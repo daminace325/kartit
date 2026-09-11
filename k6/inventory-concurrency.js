@@ -1,237 +1,200 @@
 /**
- * k6 concurrency test — Inventory safety under concurrent checkout (P2.7).
+ * k6 concurrency test — Inventory safety under SIMULTANEOUS checkout.
  *
- * Strategy:
- *   1. One product with physicalStock = 10 is created before the test.
- *   2. 200 virtual users each sign up → add a shipping address → add the
- *      product to cart → POST /orders.
- *   3. The advisory lock inside the order-create transaction guarantees
- *      serialised access per product — exactly 10 orders succeed (201) and
- *      190 fail with 409 (INSUFFICIENT_STOCK).
+ * Run via the orchestrator, which seeds the SKU and verifies the DB after:
+ *   npm run bench:inventory
+ *   npm run bench:inventory -- --stock 10 --users 200
  *
- * Prerequisites:
- *   - API running at API_BASE_URL (default http://localhost:5000)
- *   - A product with slug `concurrency-test-sku` and physicalStock = 10.
- *     Create it via admin or seed before running:
- *       curl -X POST http://localhost:5000/products \
- *         -H "Content-Type: application/json" \
- *         -d '{"slug":"concurrency-test-sku","sku":"CTS-001","name":"Concurrency Test Product","description":"k6 concurrency test","priceMinor":1999,"currency":"USD","physicalStock":10,"isActive":true,"categoryId":"<id>"}'
+ * How it works:
+ *   setup()   pre-provisions USERS accounts, each with a shipping address and
+ *             the test SKU already in their cart. This makes the measured
+ *             action a TIGHT burst of simultaneous POST /orders — the true
+ *             concurrency gate — instead of smearing it behind per-VU signup.
+ *   default() fires exactly one POST /orders per VU (shared-iterations: USERS
+ *             VUs each run a single iteration).
  *
- * Usage:
- *   k6 run k6/inventory-concurrency.js
+ * With physicalStock = TARGET_STOCK, the per-product advisory lock in
+ * reserveInventory() serialises reservation, so exactly TARGET_STOCK orders
+ * succeed (201) and every other attempt is rejected (409 INSUFFICIENT_STOCK)
+ * — zero oversell. The thresholds below fail the run if anything else happens.
  *
- *   With custom API URL:
- *   k6 run -e API_BASE_URL=http://localhost:5000 k6/inventory-concurrency.js
+ * REQUIRES the API to run with DISABLE_RATE_LIMITING=true — USERS signups from
+ * a single IP would otherwise be throttled by the auth limiter (30 / 15 min).
+ *
+ * Standalone (the SKU must already exist at the right stock):
+ *   k6 run k6/inventory-concurrency.js -e USERS=200 -e TARGET_STOCK=10
  */
 
 import http from "k6/http";
-import { check, sleep } from "k6";
 import { Counter, Trend } from "k6/metrics";
 
 // ─── Config ────────────────────────────────────────────────────────────
 
 const API_BASE = __ENV.API_BASE_URL || "http://localhost:5000";
 const PRODUCT_SLUG = __ENV.PRODUCT_SLUG || "concurrency-test-sku";
-const CONCURRENT_USERS = 200;
-const TARGET_STOCK = 10;
+const USERS = Number(__ENV.USERS) || 200;
+const TARGET_STOCK = Number(__ENV.TARGET_STOCK) || 10;
+const PASSWORD = "k6test123";
+const EMAIL_PREFIX = "k6-concurrency-";
 
 // ─── Custom metrics ─────────────────────────────────────────────────────
 
 const ordersCreated = new Counter("orders_created");
 const ordersRejected = new Counter("orders_rejected");
-const orderDuration = new Trend("order_duration_ms");
+const ordersUnexpected = new Counter("orders_unexpected");
+const orderDuration = new Trend("order_duration_ms", true);
 
 export const options = {
     scenarios: {
-        checkout_surge: {
-            executor: "ramping-vus",
-            startVUs: 0,
-            stages: [
-                { duration: "2s", target: CONCURRENT_USERS },  // ramp-up
-                { duration: "10s", target: CONCURRENT_USERS }, // hold at 200
-                { duration: "2s", target: 0 },                  // ramp-down
-            ],
+        checkout_burst: {
+            executor: "shared-iterations",
+            vus: USERS,
+            iterations: USERS,
+            maxDuration: "2m",
         },
     },
+    setupTimeout: "180s",
     thresholds: {
-        orders_created: [`count === ${TARGET_STOCK}`], // exactly 10 succeed
+        // Exactly the available stock may convert to orders — zero oversell.
+        orders_created: [`count === ${TARGET_STOCK}`],
+        // Any non-201 / non-409 response (e.g. a 500) fails the run.
+        orders_unexpected: ["count===0"],
     },
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-function extractCookie(res, cookieName) {
-  const setCookie = res.headers["Set-Cookie"];
-  if (!setCookie) return null;
-  const match = setCookie.match(new RegExp(`${cookieName}=([^;]+)`));
-  return match ? match[1] : null;
+function extractCookie(res, name) {
+    const setCookie = res.headers["Set-Cookie"];
+    if (!setCookie) return null;
+    const match = setCookie.match(new RegExp(`${name}=([^;]+)`));
+    return match ? match[1] : null;
 }
 
-function signup(vuId) {
-    const email = `k6-concurrency-${vuId}-${Date.now()}@test.com`;
-    const res = http.post(
-        `${API_BASE}/auth/signup`,
-        JSON.stringify({
-            email,
-            password: "k6test123",
-            name: `K6 User ${vuId}`,
-        }),
-        { headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" } },
-    );
-    return res;
+function authHeaders(token) {
+    return {
+        "Content-Type": "application/json",
+        Cookie: `ecomm_auth=${token}`,
+        "X-Requested-With": "fetch",
+    };
 }
 
-function createAddress(token) {
-    const res = http.post(
-        `${API_BASE}/addresses`,
-        JSON.stringify({
-            name: "K6 Test",
-            phone: "555-0001",
-            line1: "123 Main St",
-            city: "Testville",
-            state: "TS",
-            postalCode: "12345",
-            country: "US",
-        }),
-        {
-            headers: {
-                "Content-Type": "application/json",
-                Cookie: `ecomm_auth=${token}`,
-                "X-Requested-With": "fetch",
-            },
-        },
-    );
-    return res;
+// ─── Setup: pre-provision USERS (signup → address → cart) ───────────────
+//
+// Runs once, before the burst, so each VU's only measured action is a single
+// POST /orders that lands at the same instant as every other VU's.
+
+export function setup() {
+    const productRes = http.get(`${API_BASE}/products/slug/${PRODUCT_SLUG}`);
+    if (productRes.status !== 200) {
+        throw new Error(
+            `product "${PRODUCT_SLUG}" not found (${productRes.status}) — run via 'npm run bench:inventory' so it is seeded to stock=${TARGET_STOCK}.`,
+        );
+    }
+    const productId = productRes.json("product.id");
+
+    console.log(`[setup] provisioning ${USERS} users (signup → address → cart)...`);
+    const users = [];
+    for (let i = 0; i < USERS; i++) {
+        const email = `${EMAIL_PREFIX}${i}-${Date.now()}@test.com`;
+        const su = http.post(
+            `${API_BASE}/auth/signup`,
+            JSON.stringify({ email, password: PASSWORD, name: `K6 Conc ${i}` }),
+            { headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" } },
+        );
+        if (su.status !== 201) {
+            throw new Error(
+                `signup ${i} failed (${su.status}) — is the API running with DISABLE_RATE_LIMITING=true? body=${su.body}`,
+            );
+        }
+        const token = extractCookie(su, "ecomm_auth");
+        if (!token) throw new Error(`no auth cookie for user ${i}`);
+
+        const addr = http.post(
+            `${API_BASE}/addresses`,
+            JSON.stringify({
+                name: "K6 Conc",
+                phone: "555-0001",
+                line1: "1 Race Way",
+                city: "Testville",
+                state: "TS",
+                postalCode: "12345",
+                country: "US",
+            }),
+            { headers: authHeaders(token) },
+        );
+        if (addr.status !== 201) throw new Error(`address ${i} failed (${addr.status})`);
+        const addressId = addr.json("address.id");
+
+        const cart = http.post(
+            `${API_BASE}/cart/items`,
+            JSON.stringify({ productId, quantity: 1 }),
+            { headers: authHeaders(token) },
+        );
+        if (cart.status !== 201) throw new Error(`cart add ${i} failed (${cart.status})`);
+
+        users.push({ token, addressId });
+    }
+    console.log(`[setup] ready — ${users.length} carts primed. Firing simultaneous POST /orders.\n`);
+    return { users };
 }
 
-function getProductBySlug() {
-    return http.get(`${API_BASE}/products/slug/${PRODUCT_SLUG}`);
-}
+// ─── Main — one POST /orders per VU (the concurrency gate) ──────────────
 
-function addToCart(token, productId, quantity) {
-    return http.post(
-        `${API_BASE}/cart/items`,
-        JSON.stringify({ productId, quantity }),
-        {
-            headers: {
-                "Content-Type": "application/json",
-                Cookie: `ecomm_auth=${token}`,
-                "X-Requested-With": "fetch",
-            },
-        },
-    );
-}
+export default function (data) {
+    const u = data.users[(__VU - 1) % data.users.length];
 
-function createOrder(token, addressId, idemKey) {
     const start = Date.now();
     const res = http.post(
         `${API_BASE}/orders`,
-        JSON.stringify({ shippingAddressId: addressId }),
+        JSON.stringify({ shippingAddressId: u.addressId }),
         {
             headers: {
-                "Content-Type": "application/json",
-                Cookie: `ecomm_auth=${token}`,
-                "X-Requested-With": "fetch",
-                "Idempotency-Key": idemKey,
+                ...authHeaders(u.token),
+                "Idempotency-Key": `k6-conc-${__VU}-${Date.now()}`,
             },
         },
     );
     orderDuration.add(Date.now() - start);
-    return res;
-}
 
-// ─── Main ───────────────────────────────────────────────────────────────
-//
-// Flat sequential flow with top-level early returns — NOT wrapped in group()
-// because `return` inside a k6 group callback only exits the group, not the
-// default function.
-
-export default function () {
-    const vuId = __VU;
-    const iterId = __ITER;
-    const idemKey = `k6-concurrency-${vuId}-${iterId}-${Date.now()}`;
-
-    // ── 1. Signup ──────────────────────────────────────────────────
-
-    const signupRes = signup(`${vuId}-${iterId}`);
-    const signupOk = check(signupRes, { "signup 201": (r) => r.status === 201 });
-    if (!signupOk) return;
-
-    const token = extractCookie(signupRes, "ecomm_auth");
-    if (!token) return;
-
-    // ── 2. Create shipping address ──────────────────────────────────
-
-    const addrRes = createAddress(token);
-    const addrOk = check(addrRes, { "address 201": (r) => r.status === 201 });
-    if (!addrOk) return;
-
-    const addressId = addrRes.json("address.id");
-    if (!addressId) return;
-
-    // ── 3. Get product ──────────────────────────────────────────────
-
-    const productRes = getProductBySlug();
-    const productOk = check(productRes, { "product 200": (r) => r.status === 200 });
-    if (!productOk) return;
-
-    const productId = productRes.json("product.id");
-    if (!productId) return;
-
-    // ── 4. Add to cart ──────────────────────────────────────────────
-
-    const cartRes = addToCart(token, productId, 1);
-    const cartOk = check(cartRes, { "cart add 201": (r) => r.status === 201 });
-    if (!cartOk) return;
-
-    // ── 5. Create order — the concurrency gate ──────────────────────
-
-    const orderRes = createOrder(token, addressId, idemKey);
-
-    if (orderRes.status === 201) {
+    if (res.status === 201) {
         ordersCreated.add(1);
-        check(orderRes, { "order created": true });
-    } else if (orderRes.status === 409) {
+    } else if (res.status === 409 && res.json("error.code") === "INSUFFICIENT_STOCK") {
         ordersRejected.add(1);
-        check(orderRes, {
-            "order rejected (insufficient stock)": (r) =>
-                r.json("error.code") === "INSUFFICIENT_STOCK",
-        });
     } else {
-        console.error(
-            `Unexpected order status ${orderRes.status}: ${orderRes.body}`,
-        );
+        ordersUnexpected.add(1);
+        console.error(`VU ${__VU}: unexpected ${res.status} ${String(res.body).slice(0, 160)}`);
     }
-
-    sleep(0.1);
 }
 
-// ─── Teardown summary ──────────────────────────────────────────────────
+// ─── Summary (k6-side counts; DB verification is in the orchestrator) ───
 
 export function handleSummary(data) {
-    const created = data.metrics.orders_created?.values?.count || 0;
-    const rejected = data.metrics.orders_rejected?.values?.count || 0;
-    const p95 = data.metrics.order_duration_ms?.values?.["p(95)"] || 0;
-    const p99 = data.metrics.order_duration_ms?.values?.["p(99)"] || 0;
+    const c = (k) => data.metrics[k]?.values?.count || 0;
+    const created = c("orders_created");
+    const rejected = c("orders_rejected");
+    const unexpected = c("orders_unexpected");
+    const p95 = Math.round(data.metrics.order_duration_ms?.values?.["p(95)"] || 0);
 
-    console.log("");
-    console.log("╔══════════════════════════════════════════════╗");
-    console.log("║  Inventory Concurrency Test Results          ║");
-    console.log("╠══════════════════════════════════════════════╣");
-    console.log(`║  Target stock:       ${String(TARGET_STOCK).padStart(6)}                    ║`);
-    console.log(`║  Concurrent users:   ${String(CONCURRENT_USERS).padStart(6)}                    ║`);
-    console.log(`║  Orders created:     ${String(created).padStart(6)}                    ║`);
-    console.log(`║  Orders rejected:    ${String(rejected).padStart(6)}                    ║`);
-    console.log(`║  Order duration p95: ${String(Math.round(p95)).padStart(6)} ms                ║`);
-    console.log(`║  Order duration p99: ${String(Math.round(p99)).padStart(6)} ms                ║`);
-    console.log("╚══════════════════════════════════════════════╝");
-
-    const passed = created === TARGET_STOCK;
-    console.log(passed ? "✅ PASS: Exactly 10 orders succeeded." : `❌ FAIL: Expected ${TARGET_STOCK}, got ${created}.`);
+    console.log(
+        `\n[inventory-concurrency] stock=${TARGET_STOCK} users=${USERS} ` +
+            `created=${created} rejected=${rejected} unexpected=${unexpected} orderP95=${p95}ms\n`,
+    );
 
     return {
-        stdout: passed
-            ? "PASS: inventory-concurrency"
-            : "FAIL: inventory-concurrency",
+        stdout: `created=${created} rejected=${rejected} unexpected=${unexpected}\n`,
+        "k6/results/inventory-concurrency-k6.json": JSON.stringify(
+            {
+                timestamp: new Date().toISOString(),
+                stock: TARGET_STOCK,
+                users: USERS,
+                created,
+                rejected,
+                unexpected,
+                orderP95Ms: p95,
+            },
+            null,
+            2,
+        ),
     };
 }
