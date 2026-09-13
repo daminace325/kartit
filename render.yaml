@@ -1,12 +1,21 @@
-# Render Blueprint — provisions the API web service + a managed Postgres instance.
+# Render Blueprint — provisions the full backend stack:
+#   • ecomm-postgres  — managed Postgres (free)
+#   • ecomm-redis     — managed Key Value / Redis (cache, rate limiter, idempotency, BullMQ)
+#   • ecomm-api       — Express API web service (free)
+#   • ecomm-worker    — BullMQ background worker (outbox dispatcher + queues; paid, no free tier)
+#
+# The Next.js frontend (apps/web) deploys separately on Vercel.
+#
 # Apply via: Render dashboard → New → Blueprint → point at this repo.
 # Docs: https://render.com/docs/blueprint-spec
 #
 # After first deploy:
 #   1. In the `ecomm-api` service → Environment, fill every `sync: false` value
-#      (JWT_SECRET, Cloudinary creds, Stripe keys, WEB_ORIGINS).
-#   2. Add a Stripe webhook pointing at https://<service>.onrender.com/payments/webhook
-#      and copy its signing secret into STRIPE_WEBHOOK_SECRET.
+#      (Cloudinary creds, Stripe keys, WEB_ORIGINS = your Vercel origin).
+#   2. In the `ecomm-worker` service → Environment, fill STRIPE_SECRET_KEY
+#      (same key as the API — used by the reconciliation job).
+#   3. Add a Stripe webhook pointing at https://<api-service>.onrender.com/payments/webhook
+#      and copy its signing secret into the API's STRIPE_WEBHOOK_SECRET.
 
 databases:
   - name: ecomm-postgres
@@ -36,6 +45,11 @@ services:
         fromDatabase:
           name: ecomm-postgres
           property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: ecomm-redis
+          type: keyvalue
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRES_IN
@@ -62,3 +76,46 @@ services:
         sync: false
       - key: STRIPE_CURRENCY
         value: USD
+
+  # ── Managed Key Value (Redis) ─────────────────────────────────────────────
+  # Backs the cache, token-bucket rate limiter, idempotency hot path, and BullMQ
+  # queues. ipAllowList: [] keeps it private — reachable only by the API and
+  # worker over Render's internal network. noeviction protects queue jobs and
+  # idempotency claims from being dropped under memory pressure; the cache layer
+  # tolerates write failures and falls back to Postgres.
+  - type: keyvalue
+    name: ecomm-redis
+    plan: free
+    region: oregon
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
+  # ── Background worker ─────────────────────────────────────────────────────
+  # Runs the outbox dispatcher + 5 BullMQ workers (ledger, reconciliation,
+  # emails, webhook retry, inventory sweep). Workers have no free tier on Render.
+  # Does NOT run migrations — the API service owns migrate:deploy + seed.
+  - type: worker
+    name: ecomm-worker
+    runtime: node
+    plan: 0.5c-512mb
+    region: oregon
+    rootDir: .
+    buildCommand: npm ci && npm run build:worker
+    startCommand: npm run start:worker
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20.19.0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ecomm-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: ecomm-redis
+          type: keyvalue
+          property: connectionString
+      - key: STRIPE_SECRET_KEY
+        sync: false
