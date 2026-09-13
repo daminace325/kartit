@@ -1,8 +1,11 @@
-# Render Blueprint — provisions the full backend stack:
+# Render Blueprint — provisions the free-tier backend:
 #   • ecomm-postgres  — managed Postgres (free)
-#   • ecomm-redis     — managed Key Value / Redis (cache, rate limiter, idempotency, BullMQ)
+#   • ecomm-redis     — managed Key Value / Redis (cache, rate limiter, idempotency)
 #   • ecomm-api       — Express API web service (free)
-#   • ecomm-worker    — BullMQ background worker (outbox dispatcher + queues; paid, no free tier)
+#
+# Render has no free tier for background workers. For a free deploy, run it locally
+# against this Postgres when you need the ledger/reconciliation flow, or
+# uncomment the block to deploy it as a paid service.
 #
 # The Next.js frontend (apps/web) deploys separately on Vercel.
 #
@@ -12,9 +15,7 @@
 # After first deploy:
 #   1. In the `ecomm-api` service → Environment, fill every `sync: false` value
 #      (Cloudinary creds, Stripe keys, WEB_ORIGINS = your Vercel origin).
-#   2. In the `ecomm-worker` service → Environment, fill STRIPE_SECRET_KEY
-#      (same key as the API — used by the reconciliation job).
-#   3. Add a Stripe webhook pointing at https://<api-service>.onrender.com/payments/webhook
+#   2. Add a Stripe webhook pointing at https://<api-service>.onrender.com/payments/webhook
 #      and copy its signing secret into the API's STRIPE_WEBHOOK_SECRET.
 
 databases:
@@ -89,33 +90,3 @@ services:
     region: oregon
     maxmemoryPolicy: noeviction
     ipAllowList: []
-
-  # ── Background worker ─────────────────────────────────────────────────────
-  # Runs the outbox dispatcher + 5 BullMQ workers (ledger, reconciliation,
-  # emails, webhook retry, inventory sweep). Workers have no free tier on Render.
-  # Does NOT run migrations — the API service owns migrate:deploy + seed.
-  - type: worker
-    name: ecomm-worker
-    runtime: node
-    plan: 0.5c-512mb
-    region: oregon
-    rootDir: .
-    buildCommand: npm ci && npm run build:worker
-    startCommand: npm run start:worker
-    autoDeploy: true
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: NODE_VERSION
-        value: "20.19.0"
-      - key: DATABASE_URL
-        fromDatabase:
-          name: ecomm-postgres
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          name: ecomm-redis
-          type: keyvalue
-          property: connectionString
-      - key: STRIPE_SECRET_KEY
-        sync: false
