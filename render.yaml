@@ -32,8 +32,10 @@ services:
     region: oregon
     rootDir: .
     # Install at the repo root so npm workspaces can hoist + symlink @repo/*.
+    # --include=dev is required: NODE_ENV=production (below) would otherwise make
+    # npm skip devDependencies (typescript + @types/*) and break the tsc build.
     # `prisma generate` runs automatically via packages/db postinstall.
-    buildCommand: npm ci && npm run build:api
+    buildCommand: npm ci --include=dev && npm run build:api
     startCommand: npm run db:migrate:deploy && npm run db:seed && npm run start:api
     healthCheckPath: /health/live
     autoDeploy: true
