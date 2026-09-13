@@ -60,4 +60,4 @@ docker-data/
 k6/results/
 
 # Local-only working notes / handoff docs
-# context/
+context/
