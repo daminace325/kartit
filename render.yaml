@@ -21,6 +21,7 @@
 databases:
   - name: ecomm-postgres
     plan: free
+    region: singapore
     databaseName: ecomm
     user: ecomm
 
@@ -29,7 +30,7 @@ services:
     name: ecomm-api
     runtime: node
     plan: free
-    region: oregon
+    region: singapore
     rootDir: .
     # Install at the repo root so npm workspaces can hoist + symlink @repo/*.
     # --include=dev is required: NODE_ENV=production (below) would otherwise make
@@ -89,6 +90,6 @@ services:
   - type: keyvalue
     name: ecomm-redis
     plan: free
-    region: oregon
+    region: singapore
     maxmemoryPolicy: noeviction
     ipAllowList: []
