@@ -12,7 +12,7 @@ graph TD
 
     subgraph Hosting
         Vercel["Vercel<br/>(web)"]
-        Render["Render<br/>(api + db + redis)"]
+        Render["Render<br/>(api + worker + db + redis)"]
     end
 
     subgraph API["Express 5 API"]
@@ -320,22 +320,20 @@ CI runs lint → typecheck → test → build on every push and PR via GitHub Ac
 
 ## Deployment
 
-**API + Database + Redis:** [Render Blueprint](render.yaml) provisions a managed Postgres instance, a Redis instance, and the Express API web service. Apply from the Render dashboard → New → Blueprint.
+**Backend (API + Worker + Postgres + Redis):** The [Render Blueprint](render.yaml) provisions the entire backend in one step — a managed Postgres instance, a Key Value (Redis) instance, the Express API web service, and the BullMQ background worker. Apply from the Render dashboard → New → Blueprint.
 
-After first deploy, set these env vars in the `ecomm-api` service:
-- `JWT_SECRET` (auto-generated)
-- `REDIS_URL` — Render injects this automatically for managed Redis; set manually if using external Redis
+`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, and the cookie settings (`COOKIE_SECURE=true`, `COOKIE_SAMESITE=none`) are wired automatically by the blueprint. On first apply you're prompted only for the real secrets:
 - `WEB_ORIGINS` — your Vercel domain(s)
 - `CLOUDINARY_*` keys
-- `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET`
-- `COOKIE_SECURE=true`, `COOKIE_SAMESITE=none`
+- `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` (API service)
+- `STRIPE_SECRET_KEY` (worker service — used by the reconciliation job)
 
-**Worker:** Deploy as a separate Render background worker service (or alongside the API in a containerized setup). Requires `DATABASE_URL` and `REDIS_URL`. The worker runs the outbox dispatcher and all five BullMQ workers.
+The worker runs the outbox dispatcher and all five BullMQ workers. Background workers have no free tier on Render, so the blueprint uses the smallest paid plan (`0.5c-512mb`).
 
 **Web:** Deploy to Vercel. Set `NEXT_PUBLIC_*` env vars in the Vercel dashboard before the first build — they are inlined into the client bundle at build time.
 
 **Production checklist:**
 - [ ] Set up Stripe webhook pointing at `https://<api-domain>/payments/webhook` with events `payment_intent.succeeded`, `payment_intent.payment_failed`, and `charge.refunded`
+- [ ] After deploying the web app, set the API's `WEB_ORIGINS` to your Vercel origin (enables CORS + cross-site auth cookie)
 - [ ] Set up a Render Cron job calling `npm run job:sweep` every 5 minutes to clean up abandoned orders
-- [ ] Deploy the worker service (outbox dispatcher + BullMQ workers) for ledger entries and event processing
 - [ ] Enable branch protection on `main` requiring CI status checks
